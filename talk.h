@@ -24,10 +24,14 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <sys/socket.h>
 
 using namespace std;
 
-vector<string> stringSplit(string s){
+extern pthread_mutex_t accept_lock = PTHREAD_MUTEX_INITIALIZER;
+extern vector<user> users;
+
+vector<string> Split(string s){
 	vector<string> v;
 	stringstream ss; 
 	string e;
@@ -40,8 +44,43 @@ vector<string> stringSplit(string s){
 	return v;
 }
 
-bool parse(string line, user u){
-	vector<string> v = stringSplit(line);
+
+bool SendToClient(user u, string msg){
+	//Sends msg to user u from the server.
+	//u should contain client ID stuff so we can talk to them.
+	//I expect all the ports should just stay open while a user is connected.
+	
+	//Format data 
+	if (u.connected){
+		msg += '\4'; //End of transmission character to signify message over.
+
+		int cpylen;
+		int itr = 0;
+		char buf[512];
+
+		//Send data in 512 char chunks
+		while(itr < msg.size()){
+			if (itr + 512 < msg.size())
+				cpylen = 512;
+			else cpylen = msg.size() - 512;
+
+			strncpy(buf, (&msg.c_str() + itr), cpylen);
+			write(u.cli_sockfd, buf, strlen(buf));
+
+			itr += 512;
+		}
+
+		return true;  
+	} 
+	return false;
+}
+
+bool SendToClient(string msg, user u){
+	return SendToClient(u, msg);
+}
+
+bool Parse(string line, user u){
+	vector<string> v = Split(line);
 
 	if (v[0] == "who"){
 		//List online users
@@ -198,18 +237,15 @@ bool parse(string line, user u){
 	}
 	else if (v[0] == "exit" || v[0] == "quit"){
 		//Logout
+		return true;
 	}
 	else if (v[0] == "help" || v[0] == "?"){
 		//Print help
 	}
-	else if (v[0] == "register"){
-		//Register user v[1] with password v[2]
-	}
 	else{
 		printf("Error: \"%s\" is not a supported command.\n", v[0]);
-		return false;
 	}
 	//else if (v[0] == ""){}
-	
-	return true;
+
+	return false;
 }

@@ -8,6 +8,7 @@
 */
 
 
+//C++ Libraries
 #include <iostream>
 #include <stdio.h> // added for stderr
 #include <sys/types.h>
@@ -20,6 +21,8 @@
 #include <netdb.h>
 #include <string>
 #include <pthread.h>
+
+//Our files
 
 using namespace std;
 const unsigned MAXBUFLEN = 512;
