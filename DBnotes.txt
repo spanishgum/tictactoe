@@ -1,0 +1,53 @@
+USER:
+
+  <name>      // char[20]
+  <info>      // char[50]
+  <Rating>    // double (n.fff)
+  <wins>      // int
+  <losses>    // int
+  <quiet>     // boolean   (block shouts)
+  <blocked>   // <user> list
+  <mail>      // <mail> list
+
+
+
+
+MAIL:
+
+  <num>       // int
+  <title>     // char[50]
+  <from>      // <user>
+  <time>      // string (WWW MMM DD hh:mm:ss YY)
+  <body>      // string (1000000)
+
+
+
+
+GAME:
+
+  <id>        // int
+  <board>     // char[9]
+  <status>    // bool (finished)
+  <timeA>     // int (600 seconds)
+  <userA>     // <user>
+  <timeB>     // int (600 seconds)
+  <userB>     // <user>
+  <moves>     // int (up to 9)
+
+
+
+
+SERVER:
+
+  <users>     // <user> list (possibly limit?)
+  <games>     // <game> list (links up 2 users)
+  <clients>   // socket list (match to users)
+
+
+
+
+CLIENT:
+
+  <user>      // <user> (linked by server)
+  <game>      // <game> (linked by server)
+  <stream>    // socket (server connection)
