@@ -1,0 +1,465 @@
+
+LOGGING IN INTRO
+_______________________________________________________________________________
+
+
+username (guest): <name>       /// **if <name> != "guest", ask for password**
+password: <psswd>
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            %                                         %
+             %              Welcome to               %
+              %     Online Tic-tac-toe  Server      %
+             %                                        %
+            %                                          %
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+Commands supported:
+  who                     # List all online users
+  stats [name]            # Display user information
+  game                    # list all current games
+  observe <game_num>      # Observe a game
+  unobserve               # Unobserve a game
+  match <name> <b|w> [t]  # Try to start a game
+  <A|B|C><1|2|3>          # Make a move in a game
+  resign                  # Resign a game
+  refresh                 # Refresh a game
+  shout <msg>             # shout <msg> to every one online
+  tell <name> <msg>       # tell user <name> message
+  kibitz <msg>            # Comment on a game when observing
+  ' <msg>                 # Comment on a game
+  quiet                   # Quiet mode, no broadcast messages
+  nonquiet                # Non-quiet mode
+  block <id>              # No more communication from <id>
+  unblock <id>            # Allow communication from <id>
+  listmail                # List the header of the mails
+  readmail <msg_num>      # Read the particular mail
+  deletemail <msg_num>    # Delete the particular mail
+  mail <id> <title>       # Send id a mail
+  info <msg>              # change your information to <msg>
+  passwd <new>            # change password
+  exit                    # quit the system
+  quit                    # quit the system
+  help                    # print this message
+  ?                       # print this message
+You have no unread messages.          // if NOT guest
+(You have n unread messages.)
+
+You login as a guest. The only command that you can use is   // if GUEST
+'register username password'
+
+**if guest does not type the above properly print:
+You are not supposed to do this.
+ You can only use 'register username password' as a guest.
+
+
+**consider forcing username/password params**
+**consider exiting after registration (or just loop registering)**
+
+
+
+
+
+
+[invalid cmd]
+__________________________________________________________________________
+
+Command not supported.
+
+
+
+
+
+who
+__________________________________________________________________________
+
+Total 1 user(s) online:
+adam
+
+
+
+
+
+
+
+stats [name]
+__________________________________________________________________________
+
+User: adam
+Info: <none>
+Rating: 0.000
+Wins: 0, Loses: 0
+Quiet: No
+Blocked users: <none>  // or list of usernames
+
+adam is currently online.
+
+
+
+
+
+
+game
+__________________________________________________________________________
+
+Total 0 game(s):
+
+or
+
+Total 1 game(s):
+Game 0(0): adam .vs. adamm, 0 moves
+
+
+
+
+
+ observe <game_num>
+__________________________________________________________________________
+
+*constantly refresh if updated*
+  (normal table oputput)
+
+*display all kibitz msgs*
+  Kibitz* <name>:  <text>
+
+
+
+
+ unobserve
+__________________________________________________________________________
+
+if observing:
+  ?
+if not:
+  You are not observing anything.
+
+
+
+
+
+
+ match <name> <b|w> [t]  (b|w and t optional)
+__________________________________________________________________________
+
+if already in game:
+  Please finish a game before starting a new one
+
+else:
+
+*send this to <name>*
+adams invite your for a game <match adams b 600 300>.
+
+*<name> types this*
+match adams
+
+*user sees this*
+Black:           adam       White:          adams
+ Time:    600 seconds        Time:    600 seconds
+
+   1  2  3
+A  .  .  .
+B  .  .  .
+C  .  .  .
+
+
+*and <name> sees this*
+
+Black:           adam       White:          adams
+ Time:    600 seconds        Time:    600 seconds
+
+   1  2  3
+A  .  .  .
+B  .  .  .
+C  .  .  .
+
+
+possible outputs after invalid input:
+A1 is occupied
+Command not supported
+
+
+valid input:
+repeat normal output (above) with updated table
+if won, print to both:
+<name> won the game.
+
+
+
+
+
+
+resign
+__________________________________________________________________________
+if not in game:
+  You can't resign without playing a game.
+
+if in game:
+  <name> resigned.
+
+
+
+
+
+refresh
+__________________________________________________________________________
+
+if not in game:
+  You are not playing or observing any games.
+
+
+if in game:
+  (normal ouput with table)
+
+
+
+
+
+
+shout <text>
+__________________________________________________________________________
+everyone sees:
+  !shout! *<name>*: <text>
+
+
+
+
+
+
+tell <name> <text>
+__________________________________________________________________________
+if name does not exist:
+  User <name> is not online.
+
+else:
+  print <text> to <name>'s screen
+
+
+
+
+
+kibitz
+__________________________________________________________________________
+
+if not observing:
+  You are not observing any game.
+
+
+else you and everyone (not blocking you) sees:
+  Kibitz* <name>: <text>
+
+
+
+
+quiet (blocks shouts)
+__________________________________________________________________________
+Enter quiet mode.
+
+
+nonquiet
+__________________________________________________________________________
+Enter nonquiet mode.
+
+
+
+
+block <name>
+__________________________________________________________________________
+
+without <name>:
+  Blocked users: <name> list
+
+with <name>:
+  User <name> blocked.
+or
+  <name> was blocked before.
+
+
+
+
+
+unblock <name>
+__________________________________________________________________________
+
+without <name>:
+  Usage: unblock <id>
+
+with <name>:
+  User <name> unblocked.
+or
+  User <name> was not blocked.
+
+
+
+
+
+listmail
+__________________________________________________________________________
+if no msgs:
+
+You have no messages.
+
+
+else:
+
+Your messages:
+0     <name>     " yo man heard you like client server architectures"Wed Jul 22 08:17:10 2015
+1  N  <name>     " yoo"                        Wed Jul 22 08:17:49 2015
+
+
+msg format
+(   <num> <opened> <name> "<title>" <time>    )
+
+
+
+
+
+
+readmail <num>
+__________________________________________________________________________
+
+if none:
+
+You have no messages.
+
+
+else:
+
+From: <name>
+Title:  <text>
+Time: <time>
+
+<body>
+
+
+**if <num> missing just print first**
+
+
+
+
+
+deletemail <num>
+__________________________________________________________________________
+
+without <num>:
+Usage: deletemail mailnum
+
+
+else (even if empty):
+Message deleted
+
+**this updates nums on messages (n becomes n-1)**
+
+
+
+mail <name> <title>
+__________________________________________________________________________
+
+if <name> and <title> not given:
+Usage: mail username title
+
+**if <title> not given, treat it as empty**
+
+if <name> does not exist:
+<name> is not a user
+
+
+else:
+
+Please input mail body, finishing with '.' at the beginning of a line
+
+<user_entered_text>
+.
+Message sent
+
+
+
+
+
+info <msg>
+__________________________________________________________________________
+
+Info changed
+
+**if <msg> not given treat as empty**
+**updates user info (on stats)**
+
+
+
+passwd <new>
+_________________________________________________________________________
+
+Password changed.
+
+
+**if <new> is empty passwd is empty and this screws up system**
+**consider changing to this:
+
+Invalid password.
+
+
+
+
+exit | quit
+__________________________________________________________________________
+
+**exits without msg**
+
+
+
+help | ?
+__________________________________________________________________________
+
+
+Commands supported:
+  who                     # List all online users
+  stats [name]            # Display user information
+  game                    # list all current games
+  observe <game_num>      # Observe a game
+  unobserve               # Unobserve a game
+  match <name> <b|w> [t]  # Try to start a game
+  <A|B|C><1|2|3>          # Make a move in a game
+  resign                  # Resign a game
+  refresh                 # Refresh a game
+  shout <msg>             # shout <msg> to every one online
+  tell <name> <msg>       # tell user <name> message
+  kibitz <msg>            # Comment on a game when observing
+  ' <msg>                 # Comment on a game
+  quiet                   # Quiet mode, no broadcast messages
+  nonquiet                # Non-quiet mode
+  block <id>              # No more communication from <id>
+  unblock <id>            # Allow communication from <id>
+  listmail                # List the header of the mails
+  readmail <msg_num>      # Read the particular mail
+  deletemail <msg_num>    # Delete the particular mail
+  mail <id> <title>       # Send id a mail
+  info <msg>              # change your information to <msg>
+  passwd <new>            # change password
+  exit                    # quit the system
+  quit                    # quit the system
+  help                    # print this message
+  ?                       # print this message
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+special notes:
+__________________________________________________________________________
+
+
+
+-must save a user table
+-must save mail for users
+  -enforce limits?
