@@ -31,6 +31,8 @@ int serv_sockfd;
 extern bool Parse(string, user);
 extern vector<user> users;
 
+pthread_mutex_t users_lock = PTHREAD_MUTEX_INITIALIZER;
+
 void *one_thread(void *arg) {
     int cli_sockfd;
     struct sockaddr_in cli_addr;
@@ -82,8 +84,13 @@ void *one_thread(void *arg) {
                         nousr = false;
                         if (users[i].passwd == psswrd){
                             usr = users[i];
-                            sprintf(buf, "You are now logged in as %s.\r\n", users[i].name);
+                            sprintf(buf, "\16You are now logged in as %s.\r\n", users[i].name);
+
+                            pthread_mutex_lock(&users_lock);
                             *(usr).cli_sockfd = cli_sockfd
+                            pthread_mutex_unlock(&users_lock);
+
+
                             write(cli_sockfd, buf, strlen(buf));
                         }
                         else{
@@ -148,12 +155,12 @@ void *one_thread(void *arg) {
                             }
                         }
                         else if (v[0] == "quit" || v[0] == "exit" || v[0] == "bye"){
-                            buf = "Goodbye.\r\n"
+                            buf = "\3Goodbye.\r\n"
                             write(cli_sockfd, buf, strlen(buf));
                             logout = true;
                         }
                         else if (v[0] == "fuck" || v[0] == "shit"){
-                            buf = "No swearing!\r\n"
+                            buf = "Don't swear!\r\n"
                             write(cli_sockfd, buf, strlen(buf));
                         }
                         cmd = "";
@@ -187,14 +194,16 @@ void *one_thread(void *arg) {
 
 
     	if (n == 0) {
-            if (usr != NULL)
+            if (usr != NULL){
     	       printf("%s has logged out.\n", *(usr).name);
+            }
             //else printf("No user connected.\n");
     	} 
         else {
     	    printf("An unexpected error has occured.\n");
     	}
 
+        usr = NULL;
     	close(cli_sockfd);
     }
 }

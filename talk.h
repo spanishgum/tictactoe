@@ -236,14 +236,16 @@ bool Parse(string line, user u){
 		//Set u's password to v[1]
 	}
 	else if (v[0] == "exit" || v[0] == "quit"){
-		//Logout
+		char * buf = "\3Goodbye.\r\n";
+		SendToClient(buf, u);
 		return true;
 	}
 	else if (v[0] == "help" || v[0] == "?"){
 		//Print help
 	}
 	else{
-		printf("Error: \"%s\" is not a supported command.\n", v[0]);
+		char * buf = "\3Error: That is not a supported command.\r\n";
+		SendToClient(buf, u);
 	}
 	//else if (v[0] == ""){}
 

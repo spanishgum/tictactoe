@@ -26,7 +26,33 @@
 
 using namespace std;
 const unsigned MAXBUFLEN = 512;
+pthread_mutex_t logout_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t login_lock = PTHREAD_MUTEX_INITIALIZER;
+
 int sockfd;
+
+void SendToServer(string msg){	
+	//Format data 
+	msg += '\4'; //End of transmission character to signify message over.
+
+	int cpylen;
+	int itr = 0;
+	char buf[512];
+
+	//Send data in 512 char chunks
+	while(itr < msg.size()){
+		if (itr + 512 < msg.size())
+			cpylen = 512;
+		else cpylen = msg.size() - 512;
+
+		strncpy(buf, (&msg.c_str() + itr), cpylen);
+		write(sockfd, buf, strlen(buf));
+
+		itr += 512;
+	}
+
+	return;
+}//*/
 
 void *process_connection(void *arg) {
     int n;
@@ -34,18 +60,40 @@ void *process_connection(void *arg) {
     pthread_detach(pthread_self());
     while (1) {
 		n = read(sockfd, buf, MAXBUFLEN);
+
+		//Login
+		if (buf[0] == '\16'){
+			for (int i = 1; i < strlen(buf); i++)
+				buf[i - 1] = buf[i];
+			buf[n] = '\0';
+
+	    	pthread_mutex_unlock(&logout_lock);
+		}
+		//Logout
+		else if (buf[0] == '\3'){
+			for (int i = 1; i < strlen(buf); i++)
+				buf[i - 1] = buf[i];
+			buf[n] = '\0';
+
+	    	pthread_mutex_unlock(&logout_lock);
+		}
+		//Other valid message
+		else if (n > 0){
+			buf[n] = '\0';
+			cout << buf << endl;
+		}
+		
+		//Failstate
 		if (n <= 0) {
 		    if (n == 0) {
-				cout << "server closed" << endl;
+				cout << "Error: Server offline." << endl;
 		    } else {
-				cout << "something wrong" << endl;
+				cout << "An unexpected error has occured." << endl;
 		    }
 		    close(sockfd);
-		    // we directly exit the whole process.
+
 		    exit(1);
-		}
-		buf[n] = '\0';
-		cout << buf << endl;
+		}	
     }
 }
 
@@ -96,13 +144,46 @@ int main(int argc, char **argv) {
     pthread_create(&tid, NULL, &process_connection, NULL);
 
     string oneline;
-    while (getline(cin, oneline)) {
-		if (oneline == "quit") {
-		    close(sockfd);
-		    break;
-		} else {
-		    write(sockfd, oneline.c_str(), oneline.length());
-		}
+
+    string uname, pass;
+
+    pthread_mutex_lock(&login_lock);
+    pthread_mutex_lock(&logout_lock);
+
+    //Login sequence
+    printf("Enter Username and Password to Login.");
+    printf("Username: "); cin >> uname;
+
+    if (uname != "guest"){
+	    printf("Password: "); cin >> pass;
+	    string line = "\6 " + uname + " " + pass;
+    	SendToServer(line);
     }
+    else{
+    	SendToServer("\2");
+
+    	while(!logout_lock){
+    		printf("Enter Username and Password to Register.");
+    		printf("Username: "); cin >> uname;
+    		printf("Password: "); cin >> pass;
+
+    		oneline = uname + " " + pass;
+    		SendToServer(oneline);
+    	}
+    }
+    
+
+    if (login_lock)
+	    while (1){
+			getline(cin, oneline);
+		    //write(sockfd, oneline.c_str(), oneline.length());
+			SendToServer(oneline);
+
+		    if (logout_lock){
+		    	printf("Goodbye.\n");
+		    	break;
+		    }
+	    }
+
     exit(0);
 }
