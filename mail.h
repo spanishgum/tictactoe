@@ -1,10 +1,11 @@
+#ifndef _MAIL_H
+#define _MAIL_H
 
 #include <vector>
-#include <time.h>
+#include <ctime>
 #include <sstream>
-
-#pragma once
-#include "user.h"
+#include <string>
+#include <iomanip>
 
 using namespace std;
 
@@ -14,31 +15,32 @@ class mail {
 		bool open;
 		string title;
 		string from;
-		time_t time;
+		time_t timestamp;
 		string body;
 
-	mail(string m_title, user m_from, string m_body) {
+	mail(string m_title, string m_from, string m_body) {
 		title = m_title;
-		from = m_from.name;
+		from = m_from;
 		body = m_body;
-		time = time(NULL);
+		timestamp = time(NULL);
 		open = false;
 	}
-	~mail() {}
 
 	string tstamp() {
-		buf[20];
-		struct tm *now = localtime(&time);
-		strftime(buf, 20, "%c", now);
-		return str(buf);
+		char buf[31] = {'\0'};  stringstream ss;
+		struct tm *now = localtime(&timestamp);
+		
+		strftime(buf, 30, "%c", now);
+		ss << buf;
+		return ss.str();
 	}
 
 	string show_meta() {
 		stringstream ss;
 		ss << id << " " << (open ? "  " : "N ")
-			<< width(15) << from
-			<< width(30) << title
-			<< tstamp() << endl;
+			<< setfill(' ') << setw(15) << from
+			<< setfill(' ') << setw(30) << title
+			<< "  " << tstamp() << endl;
 		return ss.str();
 	}
 
@@ -52,3 +54,8 @@ class mail {
 	}
 
 };
+
+
+
+
+#endif
