@@ -1,27 +1,43 @@
 USER:
 
-  <name>      // char[20]
+  <name>      // char[15]
+  <passwd>    // char[15]
   <info>      // char[50]
-  <Rating>    // double (n.fff)
+  <rating>    // double (n.fff)
   <wins>      // int
-  <losses>    // int
+  <loses>     // int
   <quiet>     // boolean   (block shouts)
   <blocked>   // <user> list
   <mail>      // <mail> list
-
-
-
+  <cli_sockfd>// sockfd_t
+  
+  funcs:
+  
+    user(string u_name, string u_passwd)
+	string stats()
+	bool is_blocked(user u)
+	int block(user u) // 0 = blocked | 1 = success | -1 = DNE
+	
+	void list_mail()
+	bool read_mail(int id)
+	int add_mail(mail m)
+	bool del_mail()
+	
+	
+	
+	
 
 MAIL:
 
-  <num>       // int
+  <id>        // int
   <title>     // char[50]
   <from>      // <user>
   <time>      // string (WWW MMM DD hh:mm:ss YY)
   <body>      // string (1000000)
 
-
-
+  funcs:
+    void show_meta()
+    void read()
 
 GAME:
 
@@ -33,21 +49,25 @@ GAME:
   <timeB>     // int (600 seconds)
   <userB>     // <user>
   <moves>     // int (up to 9)
+  <obsrv>     // <user> list
 
 
 
+ 
 
+ //////////////////////////////////////////////////////////////////
 SERVER:
 
   <users>     // <user> list (possibly limit?)
   <games>     // <game> list (links up 2 users)
   <clients>   // socket list (match to users)
+  <curr_users>// <user> list
 
 
-
+  
 
 CLIENT:
 
   <user>      // <user> (linked by server)
-  <game>      // <game> (linked by server)
+  <games>     // <game> list (linked by server)
   <stream>    // socket (server connection)
