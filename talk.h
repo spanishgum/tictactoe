@@ -26,10 +26,24 @@
 #include <sstream>
 #include <sys/socket.h>
 
+//#include "user.h"
+
 using namespace std;
 
-extern pthread_mutex_t accept_lock = PTHREAD_MUTEX_INITIALIZER;
-extern vector<user> users;
+extern pthread_mutex_t accept_lock;
+//extern 
+
+
+struct user{
+	bool online = false;
+	string name;
+	string passwd;
+	int cli_sockfd;
+	bool inGame = false;
+	bool myTurn = false;
+};
+
+vector<user> users;
 
 vector<string> Split(string s){
 	vector<string> v;
@@ -38,9 +52,11 @@ vector<string> Split(string s){
 	ss << s;
 	ss >> e;
 	while (ss){
-		v.pusb_back(e);
+		v.push_back(e);
 		ss >> e;
 	}
+
+	v[v.size() - 1] = v[v.size() - 1].substr(0, v[v.size() - 1].size() - 1);
 	return v;
 }
 
@@ -51,12 +67,12 @@ bool SendToClient(user u, string msg){
 	//I expect all the ports should just stay open while a user is connected.
 	
 	//Format data 
-	if (u.connected){
-		msg += '\4'; //End of transmission character to signify message over.
+	if (u.online){
+		msg += "\4"; //End of transmission character to signify message over.
 
 		int cpylen;
 		int itr = 0;
-		char buf[512];
+		string buf;
 
 		//Send data in 512 char chunks
 		while(itr < msg.size()){
@@ -64,8 +80,10 @@ bool SendToClient(user u, string msg){
 				cpylen = 512;
 			else cpylen = msg.size() - 512;
 
-			strncpy(buf, (&msg.c_str() + itr), cpylen);
-			write(u.cli_sockfd, buf, strlen(buf));
+			//strncpy(buf, (&msg.c_str() + itr), cpylen);
+			buf = msg.substr(itr, itr + cpylen);
+
+			write(u.cli_sockfd, buf.c_str(), strlen(buf.c_str()));
 
 			itr += 512;
 		}
@@ -82,7 +100,10 @@ bool SendToClient(string msg, user u){
 bool Parse(string line, user u){
 	vector<string> v = Split(line);
 
-	if (v[0] == "who"){
+	if (v[0].size() == 0){
+		//noop
+	}
+	else if (v[0] == "who"){
 		//List online users
 	}
 	else if (v[0] == "stats"){
@@ -101,8 +122,8 @@ bool Parse(string line, user u){
 		//Attempt to start game with user v[1] as v[2]. Optional turn time is v[3].
 	}
 	else if (v[0].size() == 2 && 
-		(v[0][0] == "A" || v[0][0] == "B" || v[0][0] == "C") &&
-		(v[0][1] == "0" || v[0][1] == "1" || v[0][1] == "2")){
+		(v[0][0] == 'A' || v[0][0] == 'B' || v[0][0] == 'C') &&
+		(v[0][1] == '0' || v[0][1] == '1' || v[0][1] == '2')){
 		if (u.inGame && u.myTurn){
 			//Make move
 		}
@@ -123,7 +144,7 @@ bool Parse(string line, user u){
 		string msg;
 		bool seenSpace = false;
 		for (int i = 0; i < line.size(); i++){
-			if (!seenSpace && line[i] == " "){
+			if (!seenSpace && line[i] == ' '){
 				seenSpace = true;
 			}
 			else if (seenSpace){
@@ -138,10 +159,10 @@ bool Parse(string line, user u){
 		bool seenSpace1 = false;
 		bool seenSpace2 = false;
 		for (int i = 0; i < line.size(); i++){
-			if (!seenSpace1 && line[i] == " "){
+			if (!seenSpace1 && line[i] == ' '){
 				seenSpace1 = true;
 			}
-			else if (!seenSpace2 && line[i] == " "){
+			else if (!seenSpace2 && line[i] == ' '){
 				seenSpace2 = true;
 			}
 			else if (seenSpace1 && seenSpace2){
@@ -151,25 +172,11 @@ bool Parse(string line, user u){
 
 		//Send msg to v[1] from u
 	}
-	else if (v[0] == "kibitz"){
+	else if (v[0] == "kibitz" || v[0] == "'"){
 		string msg;
 		bool seenSpace = false;
 		for (int i = 0; i < line.size(); i++){
-			if (!seenSpace && line[i] == " "){
-				seenSpace = true;
-			}
-			else if (seenSpace){
-				msg += line[i];
-			}
-		}
-
-		//Send msg to all observing from user u
-	}
-	else if (v[0] == "'"){
-		string msg;
-		bool seenSpace = false;
-		for (int i = 0; i < line.size(); i++){
-			if (!seenSpace && line[i] == " "){
+			if (!seenSpace && line[i] == ' '){
 				seenSpace = true;
 			}
 			else if (seenSpace){
@@ -205,10 +212,10 @@ bool Parse(string line, user u){
 		bool seenSpace1 = false;
 		bool seenSpace2 = false;
 		for (int i = 0; i < line.size(); i++){
-			if (!seenSpace1 && line[i] == " "){
+			if (!seenSpace1 && line[i] == ' '){
 				seenSpace1 = true;
 			}
-			else if (!seenSpace2 && line[i] == " "){
+			else if (!seenSpace2 && line[i] == ' '){
 				seenSpace2 = true;
 			}
 			else if (seenSpace1 && seenSpace2){
@@ -222,7 +229,7 @@ bool Parse(string line, user u){
 		string msg;
 		bool seenSpace = false;
 		for (int i = 0; i < line.size(); i++){
-			if (!seenSpace && line[i] == " "){
+			if (!seenSpace && line[i] == ' '){
 				seenSpace = true;
 			}
 			else if (seenSpace){
@@ -236,16 +243,14 @@ bool Parse(string line, user u){
 		//Set u's password to v[1]
 	}
 	else if (v[0] == "exit" || v[0] == "quit"){
-		char * buf = "\3Goodbye.\r\n";
-		SendToClient(buf, u);
 		return true;
 	}
 	else if (v[0] == "help" || v[0] == "?"){
 		//Print help
 	}
 	else{
-		char * buf = "\3Error: That is not a supported command.\r\n";
-		SendToClient(buf, u);
+		string s = "Error: That is not a supported command.\r\n";
+		SendToClient(s.c_str(), u);
 	}
 	//else if (v[0] == ""){}
 

@@ -20,24 +20,40 @@
 #include <stdlib.h>
 #include <netdb.h>
 #include <string>
+#include <cstring>
 #include <pthread.h>
+#include <vector>
+#include <sstream>
 
 //Our files
 
 using namespace std;
 const unsigned MAXBUFLEN = 512;
-pthread_mutex_t logout_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t login_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int sockfd;
 
+bool good = true;
+
+vector<string> Split(string s){
+	vector<string> v;
+	stringstream ss; 
+	string e;
+	ss << s;
+	ss >> e;
+	while (ss){
+		v.push_back(e);
+		ss >> e;
+	}
+	return v;
+}
+
 void SendToServer(string msg){	
 	//Format data 
-	msg += '\4'; //End of transmission character to signify message over.
+	msg += "\4"; //End of transmission character to signify message over.
 
 	int cpylen;
 	int itr = 0;
-	char buf[512];
+	string buf;
 
 	//Send data in 512 char chunks
 	while(itr < msg.size()){
@@ -45,11 +61,13 @@ void SendToServer(string msg){
 			cpylen = 512;
 		else cpylen = msg.size() - 512;
 
-		strncpy(buf, (&msg.c_str() + itr), cpylen);
-		write(sockfd, buf, strlen(buf));
+		//strncpy(buf, (&msg.c_str() + itr), cpylen);
+		buf = msg.substr(itr, itr + cpylen);
+		write(sockfd, buf.c_str(), strlen(buf.c_str()));
 
 		itr += 512;
-	}
+	}//*/
+	//write(sockfd, msg.c_str(), strlen(msg.c_str()));
 
 	return;
 }//*/
@@ -61,36 +79,23 @@ void *process_connection(void *arg) {
     while (1) {
 		n = read(sockfd, buf, MAXBUFLEN);
 
-		//Login
-		if (buf[0] == '\16'){
-			for (int i = 1; i < strlen(buf); i++)
-				buf[i - 1] = buf[i];
+		//Connected
+		if (n > 0){
 			buf[n] = '\0';
-
-	    	pthread_mutex_unlock(&logout_lock);
-		}
-		//Logout
-		else if (buf[0] == '\3'){
-			for (int i = 1; i < strlen(buf); i++)
-				buf[i - 1] = buf[i];
-			buf[n] = '\0';
-
-	    	pthread_mutex_unlock(&logout_lock);
-		}
-		//Other valid message
-		else if (n > 0){
-			buf[n] = '\0';
-			cout << buf << endl;
+			cout << buf << flush;//<< "Recieved message from server: \"" << buf << "\"\n";
 		}
 		
-		//Failstate
-		if (n <= 0) {
+		//Disconnected
+		else {
+			//One of these is logout, not an error. Find out which.
 		    if (n == 0) {
-				cout << "Error: Server offline." << endl;
-		    } else {
+				cout << "You have been disconnected from the server." << endl;
+		    } 
+		    else {
 				cout << "An unexpected error has occured." << endl;
 		    }
 		    close(sockfd);
+    		good = false;
 
 		    exit(1);
 		}	
@@ -137,7 +142,7 @@ int main(int argc, char **argv) {
     freeaddrinfo(ressave);
 
     if (flag == 0) {
-		fprintf(stderr, "cannot connect\n");
+		fprintf(stderr, "Cannot connect to server.\n");
 		exit(1);
     }
 
@@ -147,43 +152,14 @@ int main(int argc, char **argv) {
 
     string uname, pass;
 
-    pthread_mutex_lock(&login_lock);
-    pthread_mutex_lock(&logout_lock);
-
-    //Login sequence
-    printf("Enter Username and Password to Login.");
-    printf("Username: "); cin >> uname;
-
-    if (uname != "guest"){
-	    printf("Password: "); cin >> pass;
-	    string line = "\6 " + uname + " " + pass;
-    	SendToServer(line);
+    cout << "Enter username and password to login.\nUsername: ";
+    while (good){
+    	getline(cin, oneline);
+    	//printf("Sending data = %s\n", oneline.c_str());
+		SendToServer(oneline);
     }
-    else{
-    	SendToServer("\2");
 
-    	while(!logout_lock){
-    		printf("Enter Username and Password to Register.");
-    		printf("Username: "); cin >> uname;
-    		printf("Password: "); cin >> pass;
-
-    		oneline = uname + " " + pass;
-    		SendToServer(oneline);
-    	}
-    }
-    
-
-    if (login_lock)
-	    while (1){
-			getline(cin, oneline);
-		    //write(sockfd, oneline.c_str(), oneline.length());
-			SendToServer(oneline);
-
-		    if (logout_lock){
-		    	printf("Goodbye.\n");
-		    	break;
-		    }
-	    }
+    printf("Logged out.\n");
 
     exit(0);
 }
