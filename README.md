@@ -1,6 +1,6 @@
 ##  TicTacToe Game Server
-####  Parallel, Concurrent, Distributed Programming
-####  Adam Stallard, Steven Rohr
+######  Parallel, Concurrent, Distributed Programming
+######  Adam Stallard, Steven Rohr
 
 
 ### Notes
