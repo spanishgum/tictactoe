@@ -1,3 +1,12 @@
+/*
+*  COP5570    |    Parallel, Concurrent, Distributed Programming
+*  Asg #4     |    Tic Tac Toe Game Server
+*  Summer C   |    07/24/15
+*
+*     by Adam Stallard, Steven Rohr
+*
+*/
+
 #ifndef _GAME_H
 #define _GAME_H
 
@@ -5,52 +14,46 @@
 #include <ctime>
 #include <sstream>
 #include <string>
+#include <cctype>
 
 using namespace std;
 
 static const char icon[2] = { '#', 'O' };
-class game;
 
+class game;
 vector<game> games;
 
-int match(u_name, vector<string> argv) {
-	string players[2], color;
-	player[0] = u_name;
-	player[1] = argv[1];
-	color = (argv[2].size() == 0) ? 0 : 
-		tolower(argv[2][0]) == 'w' ? 1 : 0;
-	
-	game new_game(games.size(), players, argv[2], argv[3]);
-}
+int g_request(string, vector<string>);
+game* g_lookup(string[2]);
+
 
 class game {
 	public:
 		int id;
 		char board[9];
-		
+
 		bool pending;
 		bool fin;
-		time_t time_A;
-		time_t time_B;
+		time_t t_A, t_B, timer;
 		string player[2];
 		int moves;
 		int turn;
 		vector<string> observing;
-		bool b_w;
-		
-		
+		bool b_w; // player 1 is black if 0
 
-		game(int gid, string users[2], bool color, time_t t = 600) {
+
+
+		game(int gid, string users[2], bool color, time_t t) {
 			id = gid;
-			time_A = time_B = t;
+			t_A = t_B = t;
 			player[0] = users[0];
 			player[1] = users[1];
 			moves = 0;
 			for (int i = 0; i < 9; ++i)
 				board[i] = '.';
 			turn = 0;
-			observing.push_back(u_A);
-			observing.push_back(u_B);
+			observing.push_back(users[0]);
+			observing.push_back(users[1]);
 			b_w = color;
 			pending = true;
 		}
@@ -59,8 +62,8 @@ class game {
 			stringstream ss;
 			int result = try_move(u, choice);
 			switch (result) {
-				case -4:
-					ss << "You are not a player of this game.\n Something went wrong.\n\n";
+				case -4: // this func was called improperly
+					ss << "Something went wrong.\n\n";
 					break;
 				case -3:
 					ss << "Please wait for your turn.\n\n"
@@ -80,8 +83,8 @@ class game {
 			if (moves > 4) check_win();
 			return ss.str();
 		}
-		
-		
+
+
 		int try_move(string u, string choice) {
 			char mark;
 			int spot = get_spot(choice);
@@ -92,20 +95,20 @@ class game {
 			else if (u == player[1])
 				mark = icon[1];
 			else return -4;
-			
+
 			board[spot] = mark;
-			
+
 			++moves;
-			
+
 			if (moves == 8) {
 				fin = true;
 				return 0;
 			}
-			
+
 			turn = !turn;
 			/* stop timer for player, start timer for other ***********************/
 		}
-		
+
 		int get_spot(string str) {
 			int spot;
 			if (str[0] < 'A' || str[0] > 'C' || str[1] < '1' || str[1] > '3') // double check range
@@ -116,7 +119,7 @@ class game {
 				return -1;
 			else return spot; // good value
 		}
-		
+
 		string print_board() {
 			stringstream ss;
 			/* metadata */
@@ -124,8 +127,8 @@ class game {
 			ss.width(15); ss << right << player[0];
 			ss << "       White:";
 			ss.width(15); ss << right << player[1] << "\n";
-			ss << " Time:    " << time_A << " seconds"
-				<< "        Time:    " << time_B << " seconds\n";
+			ss << " Time:    " << t_A << " seconds"
+				<< "        Time:    " << t_B << " seconds\n";
 			/* actual board */
 			ss << "   1  2  3\n";
 			for (int i = 0; i < 9; ++i) {
@@ -134,9 +137,10 @@ class game {
 				ss << "  " << board[i];
 				if (i % 3 == 2)
 					ss << "\n";
-			}	
+			}
+			return ss.str();
 		}
-		
+
 		bool check_win() {
 			bool win = 0;
 			char c;
@@ -150,7 +154,7 @@ class game {
 						win = 1;       /* 1 5 9 */
 				}
 				else if (board[3] == c) {
-					if (board[6] == c) 
+					if (board[6] == c)
 						win = 1;       /* 1 4 7 */
 				}
 			}
@@ -174,7 +178,7 @@ class game {
 				if (board[4] == c) {
 					if (board[5] == c)
 						win = 1;       /* 4 5 6 */
-				}		
+				}
 			}
 			else if ((c = board[6]) != '.') {
 				if (board[7] == c) {
@@ -186,7 +190,7 @@ class game {
 			return win;
 		}
 
-		
+
 		bool is_observer(string u_name) {
 			stringstream ss;
 			vector<string>::iterator u;
@@ -195,8 +199,8 @@ class game {
 					return true;
 			return false;
 		}
-		
-		
+
+
 		string add_observer(string u_name) {
 			stringstream ss;
 			if (is_observer(u_name))
@@ -209,8 +213,8 @@ class game {
 			ss << "\n";
 			return ss.str();
 		}
-		
-		
+
+
 		string rem_observer(string u_name) {
 			stringstream ss;
 			if (is_observer(u_name))
@@ -226,10 +230,80 @@ class game {
 			}
 			return ss.str();
 		}
-		
-		
+
+
 };
 
+
+
+
+
+int g_request(string u_name, vector<string> &argv) {
+	string player[2];
+	int color = -1;
+	time_t timer = -1;
+	game *g_new;
+	bool accept = 0;
+
+	player[0] = u_name; // sender
+
+	// parse 'match <user> <b|w> <t>'
+	switch(argv.size()) {
+		case 1:
+			return -1;
+		case 2:
+			player[1] = argv[1]; // reciever
+			color = 0; // default black
+			break;
+		default:
+			player[1] = argv[1]; // reciever
+			for (unsigned int i = 2; i < argv.size(); ++i) {
+				if (isdigit(argv[i][0]) && timer < 0)
+					timer = stoi(argv[i]);
+				else if (color < 0)
+					color = (tolower(argv[i][0]) == 'w') ? 1 : 0;
+			}
+	}
+
+	// enforce timer range
+	if (timer < 0 || timer > 600) timer = 600;
+
+	// check for existing game or init new one
+	if((g_new = g_lookup(player)) != 0) {
+		accept |= (g_new->b_w == (bool)color);
+		accept |= (g_new->timer == timer);
+		if (accept) // game begins
+			return 1;
+		else { // update pending request details
+			g_new->timer = g_new->t_A = g_new->t_B = timer;
+			g_new->b_w = (u_name == g_new->player[0]) ? (bool)color : (bool)!color;
+		}
+	}
+	else {
+		g_new = new game(games.size(), player, color, timer);
+		games.push_back(*g_new);
+		delete g_new;
+	}
+
+	// new pending request
+	return 0;
+}
+
+
+
+
+game* g_lookup(string player[2]) {
+	vector<game>::iterator g;
+	for (g = games.begin(); g != games.end(); ++g) {
+		if (((*g).player[0].compare(player[0])
+			|| (*g).player[1].compare(player[1])) == 0)
+			return &*g;
+		else if (((*g).player[0].compare(player[1])
+			|| (*g).player[1].compare(player[0])) == 0)
+			return &*g;
+	}
+	return NULL;
+}
 
 
 
