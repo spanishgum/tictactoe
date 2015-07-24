@@ -1,29 +1,29 @@
-*  Tic Tac Toe Game Server
-*  Parallel, Concurrent, Distributed Programming
-*  Adam Stallard, Steven Rohr
+#  Tic Tac Toe Game Server
+##  Parallel, Concurrent, Distributed Programming
+##  Adam Stallard, Steven Rohr
 
 
-Notes . . .
+### Notes
 
 *  The client and server code come together.
-*  You may compile them separately on different machines.
+*  Compile and run separately.
 
 
 
-Ready . . .
+### Ready
 
-*  shell> git clone https://github.com/spanishgum/tictactoe
-
-
-
-Set . . .
-
-*  shell> cd path/to/tictactoe
-*  shell> make fresh
+  > git clone https://github.com/spanishgum/tictactoe
 
 
 
-Go . . .
+### Set
 
-*  client> ./client [server] [port]
-*  server> ./server [port]
+  >   cd path/to/tictactoe
+  >   make fresh
+
+
+
+### Go
+
+  > ./client [server] [port]
+  > ./server [port]
