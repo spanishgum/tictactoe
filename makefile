@@ -23,26 +23,49 @@ define HEADER
   . . . building components . . .
 
 endef
+
 define FOOTER
 
 
   . . . components ready!! enjoy :)
 
 endef
+
 export HEADER FOOTER
+
+##########################################################
 
 
 CC = g++ -std=c++11
 CCFLAGS = -Wall -pedantic -O3 -lpthread
 PRGS := $(patsubst %.cpp,%,$(wildcard *.cpp))
 
+
+##########################################################
+
+
 .SUFFIXES :
-.PHONY : fresh clean cls all
+.PHONY : all tmp fresh clean cls hdr ftr
+
+
+##########################################################
+
 
 all : $(PRGS)
 
 % : %.cpp
 	$(CC) $(CCFLAGS) $@.cpp -o $@
+
+
+##########################################################
+
+
+tmp : cls
+	$(CC) $(CCFLAGS) tmp/main.cpp -o tmp
+
+
+##########################################################
+
 
 fresh : clean cls hdr all ftr
 
@@ -57,3 +80,6 @@ hdr :
 
 ftr :
 	@$(info $(FOOTER))
+
+
+##########################################################
