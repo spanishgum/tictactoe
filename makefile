@@ -12,15 +12,15 @@ define HEADER
 
 
 
------------------------------------------------------------
-|                                                         |
-|  Version 1.0 - online tic tac toe server is here!!      |
-|                                                         |
-|            Adam Stallard and Steven Rhor                |
-|                                                         |
------------------------------------------------------------
+   ---------------------------------------------------------
+   |                                                       |
+   |  Version 1.0 - online tic tac toe server is here!!    |
+   |                                                       |
+   |            Adam Stallard and Steven Rhor              |
+   |                                                       |
+   ---------------------------------------------------------
 
-  . . . building components . . .
+   . . . building components . . .
 
 endef
 
@@ -60,8 +60,8 @@ all : $(PRGS)
 ##########################################################
 
 
-tmp : cls
-	$(CC) $(CCFLAGS) tmp/main.cpp -o tmp
+tmp : cls hdr
+	$(CC) $(CCFLAGS) tmp/main.cpp -o tmp/main
 
 
 ##########################################################
