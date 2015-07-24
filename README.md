@@ -19,6 +19,7 @@
 ### Set
 
   >   cd path/to/tictactoe
+
   >   make fresh
 
 
@@ -26,4 +27,5 @@
 ### Go
 
   > ./client [server] [port]
+
   > ./server [port]
