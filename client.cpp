@@ -27,6 +27,10 @@
 
 //Our files
 
+#define _read(a, b, c) if(read((a), (b), (c)))
+#define _write(a, b, c) if(write((a), (b), (c)))
+
+
 using namespace std;
 const unsigned MAXBUFLEN = 512;
 
@@ -36,7 +40,7 @@ bool good = true;
 
 vector<string> Split(string s){
 	vector<string> v;
-	stringstream ss; 
+	stringstream ss;
 	string e;
 	ss << s;
 	ss >> e;
@@ -47,8 +51,8 @@ vector<string> Split(string s){
 	return v;
 }
 
-void SendToServer(string msg){	
-	//Format data 
+void SendToServer(string msg){
+	//Format data
 	msg += "\4"; //End of transmission character to signify message over.
 
 	int cpylen = 0;
@@ -56,7 +60,7 @@ void SendToServer(string msg){
 	char buf[512];
 
 	const int msize = msg.size();
-	
+
 	//Send data in 512 char chunks
 	while(itr < msize){
 		string subs;
@@ -64,7 +68,7 @@ void SendToServer(string msg){
 		//for(int i = 0; i < cpylen; i++)
 		//	buf[i] = '\0';
 
-		if ((itr + 512) < msg.size())
+		if ((itr + 512) < (int)msg.size())
 			cpylen = 512;
 		else {
 			cpylen = msg.size() - itr;
@@ -82,12 +86,12 @@ void SendToServer(string msg){
 
 		strcpy(buf, subs.c_str());
 		//buf[strlen(buf)] = '\0';
-		write(sockfd, buf, strlen(buf));
+		_write(sockfd, buf, strlen(buf));
 
 		itr += 512;
 	}
 
-	  
+
 
 
 	return;
@@ -105,13 +109,13 @@ void *process_connection(void *arg) {
 			buf[n] = '\0';
 			cout << buf << flush;//<< "Recieved message from server: \"" << buf << "\"\n";
 		}
-		
+
 		//Disconnected
 		else {
 			//One of these is logout, not an error. Find out which.
 		    if (n == 0) {
 				cout << "You have been disconnected from the server." << endl;
-		    } 
+		    }
 		    else {
 				cout << "An unexpected error has occured." << endl;
 		    }
@@ -119,7 +123,7 @@ void *process_connection(void *arg) {
     		good = false;
 
 		    exit(1);
-		}	
+		}
     }
 }
 
@@ -127,7 +131,7 @@ void *process_connection(void *arg) {
 
 int main(int argc, char **argv) {
     int rv, flag;
-    ssize_t n;
+    // ssize_t n;
     struct addrinfo hints, *res, *ressave;
     pthread_t tid;
 
@@ -159,7 +163,7 @@ int main(int argc, char **argv) {
 		}
 		close(sockfd);
     } while ((res = res->ai_next) != NULL);
-    
+
     freeaddrinfo(ressave);
 
     if (flag == 0) {
