@@ -22,6 +22,10 @@
 
 #include "talk.h"
 
+#define _read(a, b, c) if(read((a), (b), (c)))
+#define _write(a, b, c) if(write((a), (b), (c)))
+
+
 using namespace std;
 
 //const unsigned port = 5100;
@@ -35,10 +39,10 @@ pthread_mutex_t users_lock = PTHREAD_MUTEX_INITIALIZER;
 
 string ClientGet(int cli_sockfd){
     int n;
-    string str;
+    string str = "";
     char buf[512];
 
-    while(n = read(cli_sockfd, buf, MAXBUFLEN)){
+    while((n = read(cli_sockfd, buf, MAXBUFLEN)) > 0){ /***** added the > 0 part, test to make sure this is okay ***/
         if (buf[n] == '\4'){
             buf[n] = '\0';
             str += buf;
@@ -48,13 +52,14 @@ string ClientGet(int cli_sockfd){
             str += buf;
         }
     }
+    return str;
 }
 
 void *one_thread(void *arg) {
     int cli_sockfd;
     struct sockaddr_in cli_addr;
     socklen_t sock_len;
-    ssize_t n;
+    ssize_t n = 0; /*  added = 0 because n could be used uninitialized below */
     char buf[MAXBUFLEN];
 
     int tid = *((int *)arg);
@@ -66,7 +71,7 @@ void *one_thread(void *arg) {
 
     cout << "thread " << tid << " created" << endl;
 
-    //TODO: Need to figure out who this is. 
+    //TODO: Need to figure out who this is.
     //Maybe put it in the handshake? User sends uid or something.
     user * usr;
 
@@ -95,7 +100,7 @@ void *one_thread(void *arg) {
 
         //for (int i = 1; i < n; i++)
         //    ss << buf[i];
-        //ss >> uname; 
+        //ss >> uname;
 
 
 
@@ -105,13 +110,13 @@ void *one_thread(void *arg) {
     	    //write(cli_sockfd, buf, strlen(buf));
             if (loggedin){
                 cout << "User is logged in. Awaiting input.\n";
-                
+
 
                 //Logged in user talking to us
                 if (usr != NULL){
                     if (buf[n - 1] == '\4'){
                         buf[n] = '\0';
-                        
+
                         //Commit message
                         cmd += buf;
                         cmd[cmd.size() - 1] = '\0'; //Overwrite EOT with NULL so that printf doesn't have a stroke.
@@ -121,7 +126,7 @@ void *one_thread(void *arg) {
                     }
                     else{
                         buf[n] = '\0';
-                        
+
                         //Portion of message
 
                         cmd += buf;
@@ -158,10 +163,10 @@ void *one_thread(void *arg) {
 
                 if (strcmp(uname.c_str(), "guest") != 0){
                     //Login
-                    
+
                     msg = "Password: ";
-                    write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
-                    
+                    _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+
                     cout << "Not registration sequence.\n";
 
                     n = read(cli_sockfd, buf, MAXBUFLEN);
@@ -179,7 +184,7 @@ void *one_thread(void *arg) {
                     memset(buf,0,strlen(buf));
                     //psswrd = ClientGet(cli_sockfd);//buf;
 
-                    for (int i = 0; i < users.size() && !loggedin; i++)
+                    for (unsigned int i = 0; i < users.size() && !loggedin; i++)
                         if (users[i].name == uname){
                             nousr = false;
                             if (users[i].passwd == psswrd){
@@ -192,12 +197,12 @@ void *one_thread(void *arg) {
                                 pthread_mutex_unlock(&users_lock);
 
 
-                                write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                                 loggedin = true;
                             }
                             else{
                                 msg = "Incorrect password.\n";
-                                write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                                 logout = true;
                             }
                             break;
@@ -205,14 +210,14 @@ void *one_thread(void *arg) {
 
                     if (nousr){
                         msg = "No such user.\n";
-                        write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                        _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                         logout = true;
                     }
                 }
                 else{
                     cout << "Registration sequence.\n";
                     msg = "You are now in registration mode.\n";
-                    write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                    _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                     while (!logout && (n = read(cli_sockfd, buf, MAXBUFLEN)) > 0) {
                         cout << "User entered: \"" << buf << "\"\n";
 
@@ -230,7 +235,7 @@ void *one_thread(void *arg) {
                             cmd[cmd.size() - 1] = '\0'; //Overwrite EOT with NULL so that printf doesn't have a stroke.
                             //Parse(cmd, *usr);
                             vector<string> v = Split(cmd);
-                            for (int i = 0; i < v.size(); i++){
+                            for (unsigned int i = 0; i < v.size(); i++){
                                 cout << "v[" << i << "] = " << v[i] << " (" << v[i].size() << ")\n";
                             }
 
@@ -240,27 +245,27 @@ void *one_thread(void *arg) {
                                 if (v.size() != 3){
                                     okay = false;
                                     msg = "Format: register <username> <password>\n";
-                                    write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                    _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                                 }
                                 else{
                                     if (v[1].size() == 0 || v[1].size() > 15){
                                         okay = false;
                                         msg = "Username must be between 1 and 15 characters.\n";
-                                        write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                        _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                                     }
                                     if (v[2].size() == 0 || v[2].size() > 20){
                                         okay = false;
                                         msg = "Password must be between 1 and 20 characters.\n";
-                                        write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                        _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                                     }
                                 }
 
                                 if (okay){
-                                    for (int i = 0; i < users.size(); i++){
+                                    for (unsigned int i = 0; i < users.size(); i++){
                                         if (users[i].name == v[1]){
                                             okay = false;
                                             msg = "Username has been taken. Please try another.\n";
-                                            write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                            _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                                             break;
                                         }
                                     }
@@ -271,27 +276,27 @@ void *one_thread(void *arg) {
                                         users.push_back(u);
 
                                         msg = "You have been registered. You may now exit and login.\n";
-                                        write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                        _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                                     }
                                 }
                             }
                             else if (v[0] == "quit" || v[0] == "exit" || v[0] == "bye"){
                                 msg = "Goodbye.\r\n";
-                                write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                                 logout = true;
                             }
                             else if (v[0] == "?" || v[0] == "help"){
                                 cout << "User requesting help.\n";
                                 msg = "Register: register <username> <password>\nQuit: [quit|exit]\n";
-                                write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                             }
                             else if (v[0] == "fuck" || v[0] == "shit"){
                                 msg = "Don't swear!\r\n";
-                                write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                             }
                             else{
                                 msg = "Invalid command detected. In guest mode you may only register or quit.\n";
-                                write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                             }
                             cmd = "";
                         }
@@ -300,7 +305,7 @@ void *one_thread(void *arg) {
                             cmd += buf;
                         }
                         memset(buf,0,strlen(buf));
-                        //Register user v[1] with password v[2] 
+                        //Register user v[1] with password v[2]
                     }
                 }
             }
@@ -311,10 +316,9 @@ void *one_thread(void *arg) {
                 ccounter++;
 
                 msg = ss.str();
-                write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
             }
-        }
-        while (loggedin && !logout && (n = read(cli_sockfd, buf, MAXBUFLEN)) > 0);
+        } while (loggedin && !logout && ((n = read(cli_sockfd, buf, MAXBUFLEN)) > 0));
 
     	if (n == 0) {
             if (usr != NULL){
@@ -323,7 +327,7 @@ void *one_thread(void *arg) {
                 usr = NULL;
             }
             //else printf("No user connected.\n");
-    	} 
+    	}
         else {
     	    printf("An unexpected error has occured.\n");
     	}
