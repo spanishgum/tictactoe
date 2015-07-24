@@ -51,23 +51,44 @@ void SendToServer(string msg){
 	//Format data 
 	msg += "\4"; //End of transmission character to signify message over.
 
-	int cpylen;
+	int cpylen = 0;
 	int itr = 0;
-	string buf;
+	char buf[512];
 
+	const int msize = msg.size();
+	
 	//Send data in 512 char chunks
-	while(itr < msg.size()){
-		if (itr + 512 < msg.size())
+	while(itr < msize){
+		string subs;
+
+		//for(int i = 0; i < cpylen; i++)
+		//	buf[i] = '\0';
+
+		if ((itr + 512) < msg.size())
 			cpylen = 512;
-		else cpylen = msg.size() - 512;
+		else {
+			cpylen = msg.size() - itr;
+		}
 
 		//strncpy(buf, (&msg.c_str() + itr), cpylen);
-		buf = msg.substr(itr, itr + cpylen);
-		write(sockfd, buf.c_str(), strlen(buf.c_str()));
+
+		//memset(buf,0,strlen(buf));
+
+		//subs = msg.substr(itr, itr + cpylen);
+		subs = "";
+		for (int i = itr; i < itr + cpylen && i < msize; i++){
+			subs += msg[i];
+		}
+
+		strcpy(buf, subs.c_str());
+		//buf[strlen(buf)] = '\0';
+		write(sockfd, buf, strlen(buf));
 
 		itr += 512;
-	}//*/
-	//write(sockfd, msg.c_str(), strlen(msg.c_str()));
+	}
+
+	  
+
 
 	return;
 }//*/

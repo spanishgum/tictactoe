@@ -343,6 +343,11 @@ int main(int argc, char *argv[]) {
     	exit(1);
     }
 
+    user test;
+    test.name = "test";
+    test.passwd = "test";
+    users.push_back(test);
+
     port = atoi(argv[1]);
     number_thread = atoi(argv[2]);
 
@@ -374,5 +379,7 @@ int main(int argc, char *argv[]) {
             break;
         }
     }
-	pause();
+	cout << "Server shutting down.\n";
+    //pause();
+    return 0;
 }
