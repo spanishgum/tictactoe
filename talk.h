@@ -32,7 +32,7 @@
 using namespace std;
 
 extern pthread_mutex_t accept_lock;
-//extern 
+//extern
 
 
 /*struct user{
@@ -41,13 +41,13 @@ extern pthread_mutex_t accept_lock;
 	string passwd;
 	int cli_sockfd;
 	bool inGame = false;
-	bool myTurn = false;
+	bool turn = false;
 };//*/
 
 extern vector<user> users;
 
 bool isnum(string s){
-	for (int i = 0; i < s.size(); i++){
+	for (unsigned int i = 0; i < s.size(); i++){
 		if (!isdigit(s[i]))
 			return false;
 	}
@@ -56,7 +56,7 @@ bool isnum(string s){
 
 vector<string> Split(string s){
 	vector<string> v;
-	stringstream ss; 
+	stringstream ss;
 	string e;
 	ss << s;
 	ss >> e;
@@ -74,15 +74,15 @@ bool SendToClient(user u, string msg){
 	//Sends msg to user u from the server.
 	//u should contain client ID stuff so we can talk to them.
 	//I expect all the ports should just stay open while a user is connected.
-	
-	//Format data 
+
+	//Format data
 	if (u.online){
 		int cpylen = 0;
 		int itr = 0;
 		char buf[512];
 
-		const int msize = msg.size();
-		
+		const int msize = (const int) msg.size();
+
 
 		cout << "Message length = " << msg.size() << " characters." << endl;
 		//Send data in 512 char chunks
@@ -93,7 +93,7 @@ bool SendToClient(user u, string msg){
 			//for(int i = 0; i < cpylen; i++)
 			//	buf[i] = '\0';
 
-			if ((itr + 512) < msg.size())
+			if ((itr + 512) < (int)msg.size())
 				cpylen = 512;
 			else {
 				cpylen = msg.size() - itr;
@@ -114,7 +114,7 @@ bool SendToClient(user u, string msg){
 			cout << "Attempting to write " << cpylen << " characters (" << itr << " - " << itr + cpylen << ")." << endl;
 
 			//buf[strlen(buf)] = '\0';
-			write(u.cli_sockfd, buf, strlen(buf));
+			if(write(u.cli_sockfd, buf, strlen(buf)));
 			cout << "Written data." << endl;
 
 			itr += 512;
@@ -122,8 +122,8 @@ bool SendToClient(user u, string msg){
 		}
 
 		cout << "Done sending message to client." << endl;
-		return true;  
-	} 
+		return true;
+	}
 	return false;
 }
 
@@ -141,7 +141,7 @@ bool Parse(string line, user u){
 	else if (v[0] == "who"){
 		//List online users
 		int nOnlineUsers = 0;
-		for (int i = 0; i < users.size(); i++){
+		for (unsigned int i = 0; i < users.size(); i++){
 			if (users[i].online){
 				nOnlineUsers++;
 			}
@@ -149,9 +149,9 @@ bool Parse(string line, user u){
 
 		stringstream ss;
 		ss << "Total " << nOnlineUsers << " users currently online.\n";
-		
 
-		for (int i = 0; i < users.size(); i++){
+
+		for (unsigned int i = 0; i < users.size(); i++){
 			if (users[i].online){
 				ss << users[i].name << endl;
 			}
@@ -162,7 +162,7 @@ bool Parse(string line, user u){
 	else if (v[0] == "stats" && v.size() > 1){
 		//List information about user v[1]
 		user us;
-		for (int i = 0; i < users.size(); i++){
+		for (unsigned int i = 0; i < users.size(); i++){
 			us = users[i];
 			if (us.name == v[1])
 				break;
@@ -182,13 +182,13 @@ bool Parse(string line, user u){
 	else if (v[0] == "match" && v.size() > 3){
 		//Attempt to start game with user v[1] as v[2]. Optional turn time is v[3].
 	}
-	/*else if (v[0].size() == 2 && 
+	/*else if (v[0].size() == 2 &&
 		(v[0][0] == 'A' || v[0][0] == 'B' || v[0][0] == 'C') &&
 		(v[0][1] == '0' || v[0][1] == '1' || v[0][1] == '2')){
 		if (u.playing && (u.match->player[turn%2] == u.name)){
 			//Make move
 		}
-		else if (u.playing && !u.myTurn){
+		else if (u.playing && !u.turn){
 			printf("Error: It is not your turn.\n");
 		}
 		else{
@@ -204,7 +204,7 @@ bool Parse(string line, user u){
 	else if (v[0] == "shout" && v.size() > 1){
 		string msg;
 		bool seenSpace = false;
-		for (int i = 0; i < line.size(); i++){
+		for (unsigned int i = 0; i < line.size(); i++){
 			if (!seenSpace && line[i] == ' '){
 				seenSpace = true;
 			}
@@ -214,10 +214,10 @@ bool Parse(string line, user u){
 		}
 
 		//stringstream ss;
-		msg = "!!! " + u.name + " !!!: " + msg + "\n"; 
+		msg = "!!! " + u.name + " !!!: " + msg + "\n";
 		//ss >> msg;
-		
-		for (int i = 0; i < users.size(); i++){
+
+		for (unsigned int i = 0; i < users.size(); i++){
 			if (users[i].online){
 				SendToClient(users[i], msg);
 			}
@@ -228,7 +228,7 @@ bool Parse(string line, user u){
 		string msg;
 		bool seenSpace1 = false;
 		bool seenSpace2 = false;
-		for (int i = 0; i < line.size(); i++){
+		for (unsigned int i = 0; i < line.size(); i++){
 			if (!seenSpace1 && line[i] == ' '){
 				seenSpace1 = true;
 			}
@@ -242,10 +242,10 @@ bool Parse(string line, user u){
 
 
 		//stringstream ss;
-		msg = "### " + u.name + " ###: " + msg + "\n"; 
+		msg = "### " + u.name + " ###: " + msg + "\n";
 		//ss >> msg;
 
-		for (int i = 0; i < users.size(); i++){
+		for (unsigned int i = 0; i < users.size(); i++){
 			if (users[i].name == v[1]){
 				string mymsg = msg;
 				SendToClient(users[i], msg);
@@ -260,7 +260,7 @@ bool Parse(string line, user u){
 		string msg;
 		bool seenSpace1 = false;
 		bool seenSpace2 = false;
-		for (int i = 0; i < line.size(); i++){
+		for (unsigned int i = 0; i < line.size(); i++){
 			if (!seenSpace1 && line[i] == ' '){
 				seenSpace1 = true;
 			}
@@ -276,10 +276,10 @@ bool Parse(string line, user u){
 
 
 	}
-	else if (v[0] == "kibitz" || v[0] == "'" && v.size() > 2){
+	else if ((v[0] == "kibitz" || v[0] == "'") && v.size() > 2){
 		string msg;
 		bool seenSpace = false;
-		for (int i = 0; i < line.size(); i++){
+		for (unsigned int i = 0; i < line.size(); i++){
 			if (!seenSpace && line[i] == ' '){
 				seenSpace = true;
 			}
@@ -290,9 +290,9 @@ bool Parse(string line, user u){
 
 		//Send msg to all observing from user u
 
-		msg = "$$$ " + u.name + " $$$: " + msg + "\n"; 
+		msg = "$$$ " + u.name + " $$$: " + msg + "\n";
 
-		
+
 	}
 	else if (v[0] == "quiet"){
 		//Set u to quiet mode
@@ -315,11 +315,11 @@ bool Parse(string line, user u){
 	else if (v[0] == "deletemail" && v.size() > 1){
 		//Delete message v[1] for u
 	}
-	else if (v[0] == "mail" && v.size() > 3){ 
+	else if (v[0] == "mail" && v.size() > 3){
 		string msg;
 		bool seenSpace1 = false;
 		bool seenSpace2 = false;
-		for (int i = 0; i < line.size(); i++){
+		for (unsigned int i = 0; i < line.size(); i++){
 			if (!seenSpace1 && line[i] == ' '){
 				seenSpace1 = true;
 			}
@@ -336,7 +336,7 @@ bool Parse(string line, user u){
 	else if (v[0] == "info" && v.size() > 1){
 		string msg;
 		bool seenSpace = false;
-		for (int i = 0; i < line.size(); i++){
+		for (unsigned int i = 0; i < line.size(); i++){
 			if (!seenSpace && line[i] == ' '){
 				seenSpace = true;
 			}
@@ -351,10 +351,10 @@ bool Parse(string line, user u){
 		stringstream ss;
 		string msg;
 		bool set = false;
-		
 
 
-		for (int i = 0; i < users.size(); i++){
+
+		for (unsigned int i = 0; i < users.size(); i++){
 			if (users[i].name == u.name){
 				cout << "Set " << u.name << "\'s password to " << v[1] << endl;
 				users[i].passwd = v[1];
@@ -363,12 +363,12 @@ bool Parse(string line, user u){
 			}
 		}
 		if (set)
-			msg =  "Your password is now: " + v[1] + "\n"; 
+			msg =  "Your password is now: " + v[1] + "\n";
 		else
-			msg =  "Could not update your password.\n"; 
+			msg =  "Could not update your password.\n";
 
 		SendToClient(u, msg);
-		
+
 
 		//Set u's password to v[1]
 	}
@@ -379,7 +379,7 @@ bool Parse(string line, user u){
 		stringstream ss;
 		string msg;
 
-		
+
 		ss << left << setw(25) <<  "[...] optional field, <......> required field" << endl
 		   << left << setw(25) <<  "who " 						<< "# List all online users" << endl
 		   << left << setw(25) <<  "stats [name] " 				<< "# Display user information" << endl
@@ -407,7 +407,7 @@ bool Parse(string line, user u){
 		   << left << setw(25) <<  "exit " 						<< "# quit the system" << endl
 		   << left << setw(25) <<  "quit " 						<< "# quit the system" << endl
 		   << left << setw(25) <<  "help " 						<< "# print this message" << endl
-		   << left << setw(25) <<  "? " 						<< "# print this message" << endl; 
+		   << left << setw(25) <<  "? " 						<< "# print this message" << endl;
 
 		msg = ss.str();
 		SendToClient(u, msg);
