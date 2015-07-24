@@ -1,3 +1,12 @@
+/*
+*  COP5570    |    Parallel, Concurrent, Distributed Programming
+*  Asg #4     |    Tic Tac Toe Game Server
+*  Summer C   |    07/24/15
+*
+*     by Adam Stallard, Steven Rohr
+*
+*/
+
 #ifndef _MAIL_H
 #define _MAIL_H
 
@@ -29,7 +38,7 @@ class mail {
 	string tstamp() {
 		char buf[31] = {'\0'};  stringstream ss;
 		struct tm *now = localtime(&timestamp);
-		
+
 		strftime(buf, 30, "%c", now);
 		ss << buf;
 		return ss.str();
