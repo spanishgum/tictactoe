@@ -24,6 +24,8 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <stdlib.h>
+#include <stdio.h>
 #include <iomanip>
 #include <sys/socket.h>
 
@@ -32,6 +34,8 @@
 using namespace std;
 
 extern pthread_mutex_t accept_lock;
+extern pthread_mutex_t games_lock;
+extern pthread_mutex_t users_lock;
 //extern
 
 
@@ -69,73 +73,100 @@ vector<string> Split(string s){
 	return v;
 }
 
+void SendToClient(user& u){
+	//Update client prompt. Use for noop commands.
+	if (u.online){
+		stringstream ss;
+		ss << "< telnet " << u.clientcounter << " >: ";
+		string msg = ss.str();
+		u.clientcounter = u.clientcounter + 1;
+		//strncpy(buf, msg.c_str(), msg.size());
+		write(u.cli_sockfd, msg.c_str(), msg.size());
 
-bool SendToClient(user u, string msg){
+
+		cout << "Done sending message to client." << endl;
+	}
+}
+
+bool SendToClient(user& u, string msg){
 	//Sends msg to user u from the server.
 	//u should contain client ID stuff so we can talk to them.
 	//I expect all the ports should just stay open while a user is connected.
 
 	//Format data
 	if (u.online){
-		int cpylen = 0;
-		int itr = 0;
-		char buf[512];
+		if (msg.size() != 0){
+			int cpylen = 0;
+			int itr = 0;
 
-		const int msize = (const int) msg.size();
+			const int msize = (const int) msg.size();
 
 
-		cout << "Message length = " << msg.size() << " characters." << endl;
-		//Send data in 512 char chunks
-		while(itr < msize){
-			cout << "Beginning write loop." << endl;
-			string subs;
+			cout << "Message length = " << msg.size() << " characters." << endl;
+			//Send data in 512 char chunks
+			while(itr < msize){
+				cout << "Beginning write loop." << endl;
+				string subs;
 
-			//for(int i = 0; i < cpylen; i++)
-			//	buf[i] = '\0';
+				//for(int i = 0; i < cpylen; i++)
+				//	buf[i] = '\0';
 
-			if ((itr + 512) < (int)msg.size())
-				cpylen = 512;
-			else {
-				cpylen = msg.size() - itr;
+				if ((itr + 512) < (int)msg.size())
+					cpylen = 512;
+				else {
+					cpylen = msg.size() - itr;
+				}
+
+				subs = "";
+				for (int i = itr; i < itr + cpylen && i < msize; i++){
+					subs += msg[i];
+				}
+
+				//strncpy(buf, subs.c_str(), cpylen);
+
+				cout << "Attempting to write " << cpylen << " characters (" << itr << " - " << itr + cpylen << ")." << endl;
+
+				//buf[strlen(buf)] = '\0';
+				//if(
+				write(u.cli_sockfd, subs.c_str(), subs.size());//)
+				//cout << "Written data." << endl;
+
+				itr += 512;
+				cout << "End loop." << endl;
 			}
-
-			//strncpy(buf, (&msg.c_str() + itr), cpylen);
-
-			//memset(buf,0,strlen(buf));
-
-			//subs = msg.substr(itr, itr + cpylen);
-			subs = "";
-			for (int i = itr; i < itr + cpylen && i < msize; i++){
-				subs += msg[i];
-			}
-
-			strcpy(buf, subs.c_str());
-
-			cout << "Attempting to write " << cpylen << " characters (" << itr << " - " << itr + cpylen << ")." << endl;
-
-			//buf[strlen(buf)] = '\0';
-			if(write(u.cli_sockfd, buf, strlen(buf)));
-			cout << "Written data." << endl;
-
-			itr += 512;
-			cout << "End loop." << endl;
 		}
 
-		cout << "Done sending message to client." << endl;
+		SendToClient(u);
+
 		return true;
 	}
 	return false;
 }
 
-bool SendToClient(string msg, user u){
+bool SendToClient(string msg, user& u){
 	return SendToClient(u, msg);
 }
 
-bool Parse(string line, user u){
+bool Parse(string line, string uname){ //user& u){
 	vector<string> v = Split(line);
 	line = line.substr(0, line.size() - 1);
+	pthread_mutex_lock(&users_lock);
+
+	user u& = NULL;
+	for (unsigned int i = 0; i < users.size(); i++)
+		if (users[i].name == uname){
+			u = users[i];
+			break;
+		}
+
+	if (u == NULL){
+		cout << "Error: " << uname << " is no longer a user.\n";
+		return true;
+	}
 
 	if (v[0].size() == 0){
+		string msg = "";
+		SendToClient(u); //Send to client new prompt
 		//noop
 	}
 	else if (v[0] == "who"){
@@ -148,20 +179,21 @@ bool Parse(string line, user u){
 		}
 
 		stringstream ss;
-		ss << "Total " << nOnlineUsers << " users currently online.\n";
+		ss << "Total " << to_string(nOnlineUsers) << " users currently online.\n";
 
 
 		for (unsigned int i = 0; i < users.size(); i++){
 			if (users[i].online){
-				ss << users[i].name << endl;
+				ss << users[i].name << "\n";
 			}
 		}
 
-		SendToClient(u, ss.str());
+		string msg = ss.str();
+		SendToClient(u, msg);
 	}
 	else if (v[0] == "stats" && v.size() > 1){
 		//List information about user v[1]
-		user us;
+		user & us = users[0];
 		for (unsigned int i = 0; i < users.size(); i++){
 			us = users[i];
 			if (us.name == v[1])
@@ -219,7 +251,9 @@ bool Parse(string line, user u){
 
 		for (unsigned int i = 0; i < users.size(); i++){
 			if (users[i].online){
-				SendToClient(users[i], msg);
+				if (users[i].name == u.name)
+					bool ret = SendToClient(users[i], msg);
+				else bool ret = SendToClient(users[i], "\n" + msg);
 			}
 		}
 		//Send msg to all from user u
@@ -248,7 +282,9 @@ bool Parse(string line, user u){
 		for (unsigned int i = 0; i < users.size(); i++){
 			if (users[i].name == v[1]){
 				string mymsg = msg;
-				SendToClient(users[i], msg);
+				if (users[i].name != u.name)
+					msg = "\n" + msg;
+				bool ret = SendToClient(users[i], msg);
 				break;
 			}
 		}
@@ -356,7 +392,7 @@ bool Parse(string line, user u){
 
 		for (unsigned int i = 0; i < users.size(); i++){
 			if (users[i].name == u.name){
-				cout << "Set " << u.name << "\'s password to " << v[1] << endl;
+				cout << "Set " << u.name << "\'s password to " << v[1] << "\n";
 				users[i].passwd = v[1];
 				set = true;
 				break;
@@ -373,46 +409,46 @@ bool Parse(string line, user u){
 		//Set u's password to v[1]
 	}
 	else if (v[0] == "exit" || v[0] == "quit" || v[0] == "bye"){
+		u.online = false;
+		pthread_mutex_unlock(&users_lock);
 		return true;
 	}
 	else if (v[0] == "help" || v[0] == "?"){
 		stringstream ss;
 		string msg;
-
-
-		ss << left << setw(25) <<  "[...] optional field, <......> required field" << endl
-		   << left << setw(25) <<  "who " 						<< "# List all online users" << endl
-		   << left << setw(25) <<  "stats [name] " 				<< "# Display user information" << endl
-		   << left << setw(25) <<  "game " 						<< "# list all current games" << endl
-		   << left << setw(25) <<  "observe <game_num> " 		<< "# Observe a game" << endl
-		   << left << setw(25) <<  "unobserve " 				<< "# Unobserve a game" 	<< endl
-		   << left << setw(25) <<  "match <name> <b|w> [t]" 	<< "# Try to start a game" 	<< endl
-		   << left << setw(25) <<  "<A|B|C><1|2|3> " 			<< "# Make a move in a game" << endl
-		   << left << setw(25) <<  "resign " 					<< "# Resign a game" << endl
-		   << left << setw(25) <<  "refresh " 					<< "# Refresh a game" 	<< endl
-		   << left << setw(25) <<  "shout <msg> " 				<< "# shout <msg> to every one online" << endl
-		   << left << setw(25) <<  "tell <name> <msg> " 		<< "# tell user <name> message" 	<< endl
-		   << left << setw(25) <<  "kibitz <msg>" 				<< "# Comment on a game when observing" << endl
-		   << left << setw(25) <<  "’ <msg> " 					<< "  # Comment on a game" << endl
-		   << left << setw(25) <<  "quiet " 					<< "# Quiet mode, no broadcast messages"<< endl
-		   << left << setw(25) <<  "nonquiet " 					<< "# Non-quiet mode" << endl
-		   << left << setw(25) <<  "block <id> " 				<< "# No more communication from <id>" 	<< endl
-		   << left << setw(25) <<  "unblock <id> " 				<< "# Allow communication from <id>" 	<< endl
-		   << left << setw(25) <<  "listmail " 					<< "# List the header of the mails" 	<< endl
-		   << left << setw(25) <<  "readmail <msg_num> " 		<< "# Read the particular mail" << endl
-		   << left << setw(25) <<  "deletemail <msg_num>" 		<< "# Delete the particular mail" 	<< endl
-		   << left << setw(25) <<  "mail <id> <title> " 		<< "# Send id a mail" << endl
-		   << left << setw(25) <<  "info <msg> " 				<< "# change your information to <msg>"	<< endl
-		   << left << setw(25) <<  "passwd <new> " 				<< "# change password" << endl
-		   << left << setw(25) <<  "exit " 						<< "# quit the system" << endl
-		   << left << setw(25) <<  "quit " 						<< "# quit the system" << endl
-		   << left << setw(25) <<  "help " 						<< "# print this message" << endl
-		   << left << setw(25) <<  "? " 						<< "# print this message" << endl;
+		ss << left << setw(25) <<  "[...] optional field, <......> required field" << "\n"
+		   << left << setw(25) <<  "who " 						<< "# List all online users" << "\n"
+		   << left << setw(25) <<  "stats [name] " 				<< "# Display user information" << "\n"
+		   << left << setw(25) <<  "game " 						<< "# list all current games" << "\n"
+		   << left << setw(25) <<  "observe <game_num> " 		<< "# Observe a game" << "\n"
+		   << left << setw(25) <<  "unobserve " 				<< "# Unobserve a game" 	<< "\n"
+		   << left << setw(25) <<  "match <name> <b|w> [t]" 	<< "# Try to start a game" 	<< "\n"
+		   << left << setw(25) <<  "<A|B|C><1|2|3> " 			<< "# Make a move in a game" << "\n"
+		   << left << setw(25) <<  "resign " 					<< "# Resign a game" << "\n"
+		   << left << setw(25) <<  "refresh " 					<< "# Refresh a game" 	<< "\n"
+		   << left << setw(25) <<  "shout <msg> " 				<< "# shout <msg> to every one online" << "\n"
+		   << left << setw(25) <<  "tell <name> <msg> " 		<< "# tell user <name> message" 	<< "\n"
+		   << left << setw(25) <<  "kibitz <msg>" 				<< "# Comment on a game when observing" << "\n"
+		   << left << setw(25) <<  "’ <msg> " 					<< "  # Comment on a game" << "\n"
+		   << left << setw(25) <<  "quiet " 					<< "# Quiet mode, no broadcast messages"<< "\n"
+		   << left << setw(25) <<  "nonquiet " 					<< "# Non-quiet mode" << "\n"
+		   << left << setw(25) <<  "block <id> " 				<< "# No more communication from <id>" 	<< "\n"
+		   << left << setw(25) <<  "unblock <id> " 				<< "# Allow communication from <id>" 	<< "\n"
+		   << left << setw(25) <<  "listmail " 					<< "# List the header of the mails" 	<< "\n"
+		   << left << setw(25) <<  "readmail <msg_num> " 		<< "# Read the particular mail" << "\n"
+		   << left << setw(25) <<  "deletemail <msg_num>" 		<< "# Delete the particular mail" 	<< "\n"
+		   << left << setw(25) <<  "mail <id> <title> " 		<< "# Send id a mail" << "\n"
+		   << left << setw(25) <<  "info <msg> " 				<< "# change your information to <msg>"	<< "\n"
+		   << left << setw(25) <<  "passwd <new> " 				<< "# change password" << "\n"
+		   << left << setw(25) <<  "exit " 						<< "# quit the system" << "\n"
+		   << left << setw(25) <<  "quit " 						<< "# quit the system" << "\n"
+		   << left << setw(25) <<  "help " 						<< "# print this message" << "\n"
+		   << left << setw(25) <<  "? " 						<< "# print this message" << "\n";
 
 		msg = ss.str();
 		SendToClient(u, msg);
 
-		cout << "Done printing help." << endl;
+		cout << "Done printing help." << "\n";
 		//Print help
 	}
 	else{
@@ -421,5 +457,6 @@ bool Parse(string line, user u){
 	}
 	//else if (v[0] == ""){}
 
+	pthread_mutex_unlock(&users_lock);
 	return false;
 }

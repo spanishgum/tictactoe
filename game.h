@@ -21,6 +21,8 @@ using namespace std;
 static const char icon[2] = { '#', 'O' };
 
 class game;
+
+pthread_mutex_t games_lock = PTHREAD_MUTEX_INITIALIZER;
 vector<game> games;
 
 int g_request(string, vector<string>);

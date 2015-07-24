@@ -16,6 +16,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <pthread.h>
 #include <sstream>
 
@@ -31,11 +32,12 @@ using namespace std;
 //const unsigned port = 5100;
 const unsigned MAXBUFLEN = 512;
 pthread_mutex_t accept_lock = PTHREAD_MUTEX_INITIALIZER;
+extern pthread_mutex_t games_lock;
+extern pthread_mutex_t users_lock;
 int serv_sockfd;
-extern bool Parse(string, user);
+extern bool Parse(string, user&);
 extern vector<user> users;
 
-pthread_mutex_t users_lock = PTHREAD_MUTEX_INITIALIZER;
 
 string ClientGet(int cli_sockfd){
     int n;
@@ -64,7 +66,6 @@ void *one_thread(void *arg) {
 
     int tid = *((int *)arg);
     free(arg);
-    bool logout;
     int ccounter;
 
     string msg;
@@ -73,7 +74,6 @@ void *one_thread(void *arg) {
 
     //TODO: Need to figure out who this is.
     //Maybe put it in the handshake? User sends uid or something.
-    user * usr;
 
     for (;;) {
         ccounter = 0;
@@ -88,13 +88,13 @@ void *one_thread(void *arg) {
 
         string cmd = "";
 
-        usr = NULL;
-
+        //user * usr = NULL;
+        string usr;
         string uname, psswrd;
         bool nousr = true;
         stringstream ss;
-        logout = false;
 
+        bool logout = false;
         bool loggedin = false;
 
 
@@ -109,7 +109,9 @@ void *one_thread(void *arg) {
     	    //cout << buf << endl;
     	    //write(cli_sockfd, buf, strlen(buf));
             if (loggedin){
-                cout << "User is logged in. Awaiting input.\n";
+                cout << "Thread " << tid << ": Recieved " << n << " characters from user " << usr->name << endl << flush;
+
+                cout << "Thread " << tid << ": User is logged in. Awaiting input.\n";
 
 
                 //Logged in user talking to us
@@ -120,7 +122,7 @@ void *one_thread(void *arg) {
                         //Commit message
                         cmd += buf;
                         cmd[cmd.size() - 1] = '\0'; //Overwrite EOT with NULL so that printf doesn't have a stroke.
-                        logout = Parse(cmd, *usr);
+                        logout = Parse(cmd, usr);
                         cmd = "";
                         memset(buf,0,strlen(buf));
                     }
@@ -138,7 +140,7 @@ void *one_thread(void *arg) {
                 }
             }
             else{
-                cout << "User attempting to log in!\n";
+                cout << "Thread " << tid << ": User attempting to log in!\n";
                 //msg = "Enter username and password to log in.\r\nUsername: ";
                 //write(cli_sockfd, msg.c_str(), strlen(buf));
                 n = read(cli_sockfd, buf, MAXBUFLEN);
@@ -184,20 +186,22 @@ void *one_thread(void *arg) {
                     memset(buf,0,strlen(buf));
                     //psswrd = ClientGet(cli_sockfd);//buf;
 
-                    for (unsigned int i = 0; i < users.size() && !loggedin; i++)
+                    pthread_mutex_lock(&users_lock);
+                    for (unsigned int i = 0; i < users.size() && !loggedin; i++){
                         if (users[i].name == uname){
                             nousr = false;
                             if (users[i].passwd == psswrd){
-                                usr = &users[i];
+                                usr = users[i].name;
                                 msg = "You are now logged in as " + uname + "\n";
 
-                                pthread_mutex_lock(&users_lock);
+                                //pthread_mutex_lock(&users_lock);
                                 usr->cli_sockfd = cli_sockfd;
                                 usr->online = true;
-                                pthread_mutex_unlock(&users_lock);
+                                usr->clientcounter = 0;
+                                //pthread_mutex_unlock(&users_lock);
 
 
-                                _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                bool ret = SendToClient(*usr, msg); //_write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                                 loggedin = true;
                             }
                             else{
@@ -207,6 +211,8 @@ void *one_thread(void *arg) {
                             }
                             break;
                         }
+                    }
+                    pthread_mutex_unlock(&users_lock);
 
                     if (nousr){
                         msg = "No such user.\n";
@@ -261,6 +267,7 @@ void *one_thread(void *arg) {
                                 }
 
                                 if (okay){
+                                    pthread_mutex_lock(&users_lock);
                                     for (unsigned int i = 0; i < users.size(); i++){
                                         if (users[i].name == v[1]){
                                             okay = false;
@@ -273,11 +280,13 @@ void *one_thread(void *arg) {
                                         user u;
                                         u.name = v[1];
                                         u.passwd = v[2];
+                                        u.online = false;
                                         users.push_back(u);
 
                                         msg = "You have been registered. You may now exit and login.\n";
                                         _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                                     }
+                                    pthread_mutex_unlock(&users_lock);
                                 }
                             }
                             else if (v[0] == "quit" || v[0] == "exit" || v[0] == "bye"){
@@ -310,21 +319,22 @@ void *one_thread(void *arg) {
                 }
             }
 
-            if (loggedin){
+            /*if (loggedin){
                 stringstream ss;
                 ss << "< telnet " << ccounter << " > ";
                 ccounter++;
 
                 msg = ss.str();
                 _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
-            }
+            }*/
+
         } while (loggedin && !logout && ((n = read(cli_sockfd, buf, MAXBUFLEN)) > 0));
 
     	if (n == 0) {
             if (usr != NULL){
                 usr->online = false;
                 printf("%s has logged out.\n", usr->name.c_str());
-                usr = NULL;
+                usr = "";
             }
             //else printf("No user connected.\n");
     	}
@@ -350,6 +360,11 @@ int main(int argc, char *argv[]) {
     user test;
     test.name = "test";
     test.passwd = "test";
+    users.push_back(test);
+
+    test;
+    test.name = "cat";
+    test.passwd = "dog";
     users.push_back(test);
 
     port = atoi(argv[1]);

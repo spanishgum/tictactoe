@@ -20,6 +20,8 @@
 using namespace std;
 
 class user;
+
+pthread_mutex_t users_lock = PTHREAD_MUTEX_INITIALIZER;
 vector<user> users;
 
 class user {
@@ -37,6 +39,7 @@ class user {
 		game *match;
 		bool playing;
 
+		int clientcounter;
 		int cli_sockfd;
 
 		friend bool operator ==(user &l, user &r) {
@@ -49,7 +52,9 @@ class user {
 			name = u_name;
 			passwd = u_passwd;
 			info = "";
-			rating = wins = loses = quiet = online = 0;
+			rating = wins = loses = quiet =
+			clientcounter = 0;
+			online = false;
 			match = 0;
 		}
 

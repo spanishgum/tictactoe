@@ -84,9 +84,9 @@ void SendToServer(string msg){
 			subs += msg[i];
 		}
 
-		strcpy(buf, subs.c_str());
+		//strcpy(buf, subs.c_str());
 		//buf[strlen(buf)] = '\0';
-		_write(sockfd, buf, strlen(buf));
+		_write(sockfd, subs.c_str(), subs.size());
 
 		itr += 512;
 	}
