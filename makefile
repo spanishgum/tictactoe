@@ -22,6 +22,7 @@ define HEADER
 
    . . . building components . . .
 
+
 endef
 
 define FOOTER
