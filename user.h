@@ -36,7 +36,7 @@ class user {
 			else return false;
 		}
 
-		user(string u_name, string u_passwd) {
+		user(string u_name = "", string u_passwd = "") {
 			name = u_name;
 			passwd = u_passwd;
 			info = "";
