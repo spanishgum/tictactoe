@@ -15,16 +15,16 @@
 
 void save_user(user &u) {
 	ofstream ofs;
-
+	ofs.open(USER_DAT, "a");
+	ofs << u;
 	ofs.close();
 }
 
 
 void load_user(user &u) {
 	ifstream ifs;
-	char form_feed = '\f';
-	
-
+	ifs.open(USER_DAT, "r");
+	ifs >> u;
 	ifs.close();
 }
 
