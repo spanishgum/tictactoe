@@ -16,6 +16,11 @@
 #include <string>
 #include <iomanip>
 
+// used in >> overload
+#define grab_data() \
+	getline(form, data); \
+	data.pop_back()
+
 using namespace std;
 
 class mail {
@@ -27,6 +32,38 @@ class mail {
 		time_t timestamp;
 		string body;
 
+	friend ostream& operator <<(ostream &ofs, mail m) {
+
+		ofs << m.id << "\n" << m.open << "\n" << m.title << "\n"
+			<< m.from << "\n" << (int)m.timestamp << "\n" << m.body
+			<< "\v"; // denotes end of mail
+		return ofs;
+	}
+	friend istream& operator >>(istream &ifs, mail &m) {
+		stringstream form, tmp;
+		string data, sub_data;
+		char c;
+		do {
+			c = ifs.get();
+			form << c;
+		} while (c != '\v'); // end of mail marker
+
+		if (form.str().size() < 2) return ifs; // no mail
+
+
+		grab_data(); m.id = stoi(data);
+		grab_data(); m.open = (bool) stoi(data);
+        grab_data(); m.title = data;
+		grab_data(); m.from = data;
+		grab_data(); m.timestamp = (time_t) stoi(data);
+
+		/* rest of form is the body */
+		m.body = form.str();
+		(m.body).pop_back();
+		return ifs;
+	}
+
+	mail();
 	mail(string m_title, string m_from, string m_body) {
 		title = m_title;
 		from = m_from;
