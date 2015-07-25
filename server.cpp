@@ -89,7 +89,7 @@ void *one_thread(void *arg) {
         string cmd = "";
 
         //user * usr = NULL;
-        string usr;
+        user *usr;
         string uname, psswrd;
         bool nousr = true;
         stringstream ss;
@@ -122,7 +122,7 @@ void *one_thread(void *arg) {
                         //Commit message
                         cmd += buf;
                         cmd[cmd.size() - 1] = '\0'; //Overwrite EOT with NULL so that printf doesn't have a stroke.
-                        logout = Parse(cmd, usr);
+                        logout = Parse(cmd, usr->name);
                         cmd = "";
                         memset(buf,0,strlen(buf));
                     }
@@ -191,7 +191,7 @@ void *one_thread(void *arg) {
                         if (users[i].name == uname){
                             nousr = false;
                             if (users[i].passwd == psswrd){
-                                usr = users[i].name;
+                                usr = &users[i];
                                 msg = "You are now logged in as " + uname + "\n";
 
                                 //pthread_mutex_lock(&users_lock);
@@ -201,7 +201,7 @@ void *one_thread(void *arg) {
                                 //pthread_mutex_unlock(&users_lock);
 
 
-                                bool ret = SendToClient(*usr, msg); //_write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
+                                SendToClient(*usr, msg); //_write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                                 loggedin = true;
                             }
                             else{
@@ -334,7 +334,7 @@ void *one_thread(void *arg) {
             if (usr != NULL){
                 usr->online = false;
                 printf("%s has logged out.\n", usr->name.c_str());
-                usr = "";
+                usr = NULL;
             }
             //else printf("No user connected.\n");
     	}
@@ -362,7 +362,7 @@ int main(int argc, char *argv[]) {
     test.passwd = "test";
     users.push_back(test);
 
-    test;
+    // test;
     test.name = "cat";
     test.passwd = "dog";
     users.push_back(test);
