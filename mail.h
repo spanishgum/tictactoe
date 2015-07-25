@@ -63,7 +63,7 @@ class mail {
 		return ifs;
 	}
 
-	mail();
+	mail(){}
 	mail(string m_title, string m_from, string m_body) {
 		title = m_title;
 		from = m_from;
