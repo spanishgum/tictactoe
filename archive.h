@@ -15,7 +15,7 @@
 
 void save_user(user &u) {
 	ofstream ofs;
-	ofs.open(USER_DAT, "a");
+	ofs.open(USER_DAT, ios_base::out);
 	ofs << u;
 	ofs.close();
 }
@@ -23,7 +23,7 @@ void save_user(user &u) {
 
 void load_user(user &u) {
 	ifstream ifs;
-	ifs.open(USER_DAT, "r");
+	ifs.open(USER_DAT, ios_base::in);
 	ifs >> u;
 	ifs.close();
 }
