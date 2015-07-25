@@ -14,16 +14,16 @@
 #define USER_DAT "users.dat"
 
 void save_user(user &u) {
-	ofstream ofs(USER_DAT, "a");
+	ofstream ofs;
 
 	ofs.close();
 }
 
 
 void load_user(user &u) {
-	ifstream ifs(USER_DAT, "r");
-	char form_feed;
-
+	ifstream ifs;
+	char form_feed = '\f';
+	
 
 	ifs.close();
 }
@@ -31,10 +31,10 @@ void load_user(user &u) {
 
 int save() {
 
-
+	return 0;
 }
 
 int load() {
 
-	
+	return 0;
 }
