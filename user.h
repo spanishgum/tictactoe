@@ -48,11 +48,70 @@ class user {
 			else return false;
 		}
 
+		friend ostream& operator <<(ostream &ofs, user u) {
+			ofs << u.name << "\n" << u.passwd << "\n"
+				<< u.info << "\n"	<< u.rating << "\n"
+				<< u.wins << "\n" << u.loses << "\n"
+				<< u.quiet << "\n";
+			for (vector<string>::iterator b = u.blocked.begin();
+				b != u.blocked.end(); ++b)
+				ofs << (*b) << " ";
+			ofs << "\n"; // end of blocked users list
+			ofs << u.inbox.size() << "\n"; // metadata for mail
+			for (vector<mail>::iterator i = u.inbox.begin();
+				i != u.inbox.end(); ++i)
+				ofs << (*i);
+			ofs << u.cli_sockfd << "\n"
+				<< "\f"; // form feed to separate users
+
+			return ofs;
+		}
+
+		friend istream& operator >>(istream &ifs, user &u) {
+			stringstream form, tmp;
+			string data, sub_data;
+			mail m;
+			char c; unsigned int num_msgs;
+			do {
+				c = ifs.get();
+				form << c;
+			} while (c != '\f'); // grab all the way to form feed
+
+			grab_data(); u.name = data;
+			grab_data(); u.passwd = data;
+			grab_data(); u.info = data;
+			grab_data(); u.rating = stod(data);
+			grab_data(); u.wins = stoi(data);
+			grab_data(); u.loses = stoi(data);
+            grab_data(); u.quiet = (bool) stoi(data);
+            grab_data(); /* get list of blocked */
+			while (tmp << data) {
+				sub_data = tmp.str(); // copy elem
+				u.blocked.push_back(sub_data); // push elem
+				tmp.str(string()); // clear buff
+			}
+			grab_data(); num_msgs = stoi(data);
+      for (unsigned int i = 0; i < num_msgs; ++i) { /* get mail data - msg ends with \v */
+				form >> m;
+				u.inbox.push_back(m);
+			}
+      grab_data(); u.cli_sockfd = stoi(data);
+
+			form >> c; // make sure data was read in properly
+			if (c != '\f') {
+				cout << "Error: user form alignment has been corrupted.\n";
+				exit(-1);
+			}
+
+			return ifs;
+		}
+
+
 		user(string u_name = "", string u_passwd = "") {
 			name = u_name;
 			passwd = u_passwd;
 			info = "";
-			rating = wins = loses = quiet =
+			rating = wins = loses = quiet = 0;
 			clientcounter = 0;
 			online = false;
 			match = 0;
