@@ -106,12 +106,12 @@ class user {
 			return ifs;
 		}
 
-		
+
 		user(string u_name = "", string u_passwd = "") {
 			name = u_name;
 			passwd = u_passwd;
 			info = "";
-			rating = wins = loses = quiet =
+			rating = wins = loses = quiet = 0;
 			clientcounter = 0;
 			online = false;
 			match = 0;
