@@ -147,22 +147,35 @@ bool SendToClient(string msg, user& u){
 	return SendToClient(u, msg);
 }
 
-bool Parse(string line, string uname){ //user& u){
+bool SendToClient(string u, string msg){
+	for (int i = 0; i < users.size(); i++){
+		if (users[i].name == u){
+			SendToClient(users[i], msg);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool Parse(string line, user& u){
 	vector<string> v = Split(line);
 	line = line.substr(0, line.size() - 1);
 	pthread_mutex_lock(&users_lock);
 
-	user u& = NULL;
+	/*user &u = users[0];
+	bool found = false;
+
 	for (unsigned int i = 0; i < users.size(); i++)
 		if (users[i].name == uname){
 			u = users[i];
+			found = true;
 			break;
 		}
 
-	if (u == NULL){
+	if (!found){
 		cout << "Error: " << uname << " is no longer a user.\n";
 		return true;
-	}
+	}*/
 
 	if (v[0].size() == 0){
 		string msg = "";

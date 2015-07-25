@@ -88,8 +88,8 @@ void *one_thread(void *arg) {
 
         string cmd = "";
 
-        //user * usr = NULL;
-        string usr;
+        user * usr = NULL;
+        //string usr;
         string uname, psswrd;
         bool nousr = true;
         stringstream ss;
@@ -113,6 +113,14 @@ void *one_thread(void *arg) {
 
                 cout << "Thread " << tid << ": User is logged in. Awaiting input.\n";
 
+                pthread_mutex_lock(&users_lock);
+                for (int i = 0; i < users.size(); i++){
+                    if (users[i].name == uname){                    
+                            usr = &users[i];
+                            break;
+                    }
+                }   
+                pthread_mutex_unlock(&users_lock);
 
                 //Logged in user talking to us
                 if (usr != NULL){
@@ -122,7 +130,7 @@ void *one_thread(void *arg) {
                         //Commit message
                         cmd += buf;
                         cmd[cmd.size() - 1] = '\0'; //Overwrite EOT with NULL so that printf doesn't have a stroke.
-                        logout = Parse(cmd, usr);
+                        logout = Parse(cmd, *usr);
                         cmd = "";
                         memset(buf,0,strlen(buf));
                     }
@@ -191,13 +199,13 @@ void *one_thread(void *arg) {
                         if (users[i].name == uname){
                             nousr = false;
                             if (users[i].passwd == psswrd){
-                                usr = users[i].name;
+                                usr = &users[i];
                                 msg = "You are now logged in as " + uname + "\n";
 
                                 //pthread_mutex_lock(&users_lock);
-                                usr->cli_sockfd = cli_sockfd;
-                                usr->online = true;
-                                usr->clientcounter = 0;
+                                users[i].cli_sockfd = cli_sockfd;
+                                users[i].online = true;
+                                users[i].clientcounter = 0;
                                 //pthread_mutex_unlock(&users_lock);
 
 
@@ -239,7 +247,6 @@ void *one_thread(void *arg) {
                             //Commit message
                             cmd += buf;
                             cmd[cmd.size() - 1] = '\0'; //Overwrite EOT with NULL so that printf doesn't have a stroke.
-                            //Parse(cmd, *usr);
                             vector<string> v = Split(cmd);
                             for (unsigned int i = 0; i < v.size(); i++){
                                 cout << "v[" << i << "] = " << v[i] << " (" << v[i].size() << ")\n";
@@ -334,7 +341,7 @@ void *one_thread(void *arg) {
             if (usr != NULL){
                 usr->online = false;
                 printf("%s has logged out.\n", usr->name.c_str());
-                usr = "";
+                usr = NULL;
             }
             //else printf("No user connected.\n");
     	}
