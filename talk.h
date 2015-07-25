@@ -152,10 +152,10 @@ bool Parse(string line, string uname){ //user& u){
 	line = line.substr(0, line.size() - 1);
 	pthread_mutex_lock(&users_lock);
 
-	user u& = NULL;
+	user *u = NULL;
 	for (unsigned int i = 0; i < users.size(); i++)
 		if (users[i].name == uname){
-			u = users[i];
+			u = &users[i];
 			break;
 		}
 
@@ -164,9 +164,10 @@ bool Parse(string line, string uname){ //user& u){
 		return true;
 	}
 
+
 	if (v[0].size() == 0){
 		string msg = "";
-		SendToClient(u); //Send to client new prompt
+		SendToClient(*u); //Send to client new prompt
 		//noop
 	}
 	else if (v[0] == "who"){
@@ -189,7 +190,7 @@ bool Parse(string line, string uname){ //user& u){
 		}
 
 		string msg = ss.str();
-		SendToClient(u, msg);
+		SendToClient(*u, msg);
 	}
 	else if (v[0] == "stats" && v.size() > 1){
 		//List information about user v[1]
@@ -200,7 +201,7 @@ bool Parse(string line, string uname){ //user& u){
 				break;
 		}
 
-		SendToClient(u, us.stats());
+		SendToClient(*u, us.stats());
 	}
 	else if (v[0] == "game"){
 		//List all running games (with id, players, etc)
@@ -217,10 +218,10 @@ bool Parse(string line, string uname){ //user& u){
 	/*else if (v[0].size() == 2 &&
 		(v[0][0] == 'A' || v[0][0] == 'B' || v[0][0] == 'C') &&
 		(v[0][1] == '0' || v[0][1] == '1' || v[0][1] == '2')){
-		if (u.playing && (u.match->player[turn%2] == u.name)){
+		if ((*u).playing && ((*u).match->player[turn%2] == (*u).name)){
 			//Make move
 		}
-		else if (u.playing && !u.turn){
+		else if ((*u).playing && !(*u).turn){
 			printf("Error: It is not your turn.\n");
 		}
 		else{
@@ -246,14 +247,15 @@ bool Parse(string line, string uname){ //user& u){
 		}
 
 		//stringstream ss;
-		msg = "!!! " + u.name + " !!!: " + msg + "\n";
+		msg = "!!! " + (*u).name + " !!!: " + msg + "\n";
 		//ss >> msg;
+
 
 		for (unsigned int i = 0; i < users.size(); i++){
 			if (users[i].online){
-				if (users[i].name == u.name)
-					bool ret = SendToClient(users[i], msg);
-				else bool ret = SendToClient(users[i], "\n" + msg);
+				if (users[i].name == (*u).name)
+					SendToClient(users[i], msg);
+				else SendToClient(users[i], "\n" + msg);
 			}
 		}
 		//Send msg to all from user u
@@ -276,15 +278,15 @@ bool Parse(string line, string uname){ //user& u){
 
 
 		//stringstream ss;
-		msg = "### " + u.name + " ###: " + msg + "\n";
+		msg = "### " + (*u).name + " ###: " + msg + "\n";
 		//ss >> msg;
 
 		for (unsigned int i = 0; i < users.size(); i++){
 			if (users[i].name == v[1]){
 				string mymsg = msg;
-				if (users[i].name != u.name)
+				if (users[i].name != (*u).name)
 					msg = "\n" + msg;
-				bool ret = SendToClient(users[i], msg);
+				SendToClient(users[i], msg);
 				break;
 			}
 		}
@@ -326,7 +328,7 @@ bool Parse(string line, string uname){ //user& u){
 
 		//Send msg to all observing from user u
 
-		msg = "$$$ " + u.name + " $$$: " + msg + "\n";
+		msg = "$$$ " + (*u).name + " $$$: " + msg + "\n";
 
 
 	}
@@ -391,8 +393,8 @@ bool Parse(string line, string uname){ //user& u){
 
 
 		for (unsigned int i = 0; i < users.size(); i++){
-			if (users[i].name == u.name){
-				cout << "Set " << u.name << "\'s password to " << v[1] << "\n";
+			if (users[i].name == (*u).name){
+				cout << "Set " << (*u).name << "\'s password to " << v[1] << "\n";
 				users[i].passwd = v[1];
 				set = true;
 				break;
@@ -403,13 +405,13 @@ bool Parse(string line, string uname){ //user& u){
 		else
 			msg =  "Could not update your password.\n";
 
-		SendToClient(u, msg);
+		SendToClient((*u), msg);
 
 
 		//Set u's password to v[1]
 	}
 	else if (v[0] == "exit" || v[0] == "quit" || v[0] == "bye"){
-		u.online = false;
+		(*u).online = false;
 		pthread_mutex_unlock(&users_lock);
 		return true;
 	}
@@ -446,14 +448,14 @@ bool Parse(string line, string uname){ //user& u){
 		   << left << setw(25) <<  "? " 						<< "# print this message" << "\n";
 
 		msg = ss.str();
-		SendToClient(u, msg);
+		SendToClient((*u), msg);
 
 		cout << "Done printing help." << "\n";
 		//Print help
 	}
 	else{
 		string s = "Error: That is not a supported command.\r\n";
-		SendToClient(s.c_str(), u);
+		SendToClient(s.c_str(), (*u));
 	}
 	//else if (v[0] == ""){}
 
