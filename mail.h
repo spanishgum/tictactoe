@@ -16,55 +16,78 @@
 #include <string>
 #include <iomanip>
 
-// used in >> overload
-#define grab_data() \
-	getline(form, data); \
-	data.pop_back()
-
 using namespace std;
 
 class mail {
 	public:
 		int id;
 		bool open;
+		time_t timestamp;
 		string title;
 		string from;
-		time_t timestamp;
 		string body;
 
 	friend ostream& operator <<(ostream &ofs, mail m) {
-
 		ofs << m.id << "\n" << m.open << "\n" << m.title << "\n"
-			<< m.from << "\n" << (int)m.timestamp << "\n" << m.body
-			<< "\v"; // denotes end of mail
+			<< m.from << "\n" << (int)m.timestamp << "\n" << m.body;
+			// '.' on one line denotes end of mail
 		return ofs;
 	}
+
 	friend istream& operator >>(istream &ifs, mail &m) {
 		stringstream form, tmp;
 		string data, sub_data;
-		char c;
+		string line;
+		int num_lines = 0;
 		do {
-			c = ifs.get();
-			form << c;
-		} while (c != '\v'); // end of mail marker
+			getline(ifs, line);
+			form << line << "\n"; // \n removed, add it back
+			++num_lines;
+		} while (line.compare(".") != 0); // end of mail marker
 
-		if (form.str().size() < 2) return ifs; // no mail
+		// double check mail meta data quality
+		if (num_lines < 6) {
+			if (num_lines > 1)
+				cerr << "Back up data file may be corrupted. . .\n"
+					<< "\tAborting load for curr mail object\n";
+			else
+				cerr << "Ivalid meta data for user mail content. . .\n"
+					<< "\tAborting load for curr mail object\n";
+			return ifs;
+		}
 
+		// proceed to grab mail data
+		getline(form, data); m.id = _stoi(data);
+		getline(form, data); m.open = (bool) _stoi(data);
+    getline(form, data); m.title = data;
+		getline(form, data); m.from = data;
+		getline(form, data); m.timestamp = (time_t) _stoi(data);
+		m.body = form.str().substr(form.tellg()); // remainder will be the body
 
-		grab_data(); m.id = stoi(data);
-		grab_data(); m.open = (bool) stoi(data);
-        grab_data(); m.title = data;
-		grab_data(); m.from = data;
-		grab_data(); m.timestamp = (time_t) stoi(data);
-
-		/* rest of form is the body */
-		m.body = form.str();
-		(m.body).pop_back();
 		return ifs;
 	}
 
-	mail(){}
-	mail(string m_title, string m_from, string m_body) {
+	// wrapper for stoi to prevent aborts in >> overload
+	static int _stoi(string data) {
+		string sub = "";
+		for(char c : data) {
+			if (isdigit(c)) {
+				sub += c;
+			}
+			else if (c == '-') {
+				if (sub == "") {
+					sub += c;
+				}
+				else break;
+			}
+			else break; // only grab leading digits in string
+		}
+		return stoi(sub);
+	}
+
+
+	mail(string m_title = "", string m_from = "", string m_body = ".\n") {
+		id = -1;
 		title = m_title;
 		from = m_from;
 		body = m_body;
