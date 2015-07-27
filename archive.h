@@ -115,6 +115,7 @@ int load_server() {
 	ifstream swap(USER_SWP, ios_base::in);
 	ifstream back(SWP_BACK, ios_base::in);
 
+	cout << "Initiating server data load\n" << flush;
 	if (swap) {
 		cerr << "Server may have crashed unexpectedly on last run\n"
 			<< "\tLoading server from swap file\n";
