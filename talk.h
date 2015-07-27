@@ -28,343 +28,301 @@
 #include <stdio.h>
 #include <iomanip>
 #include <sys/socket.h>
-
 #include "user.h"
+
+#define _read(a, b, c) if(read((a), (b), (c)))
+#define _write(a, b, c) if(write((a), (b), (c)))
+
+bool DEBUG_LEV = 0;
 
 using namespace std;
 
 extern pthread_mutex_t accept_lock;
 extern pthread_mutex_t games_lock;
 extern pthread_mutex_t users_lock;
-//extern
-
-
-/*struct user{
-	bool online = false;
-	string name;
-	string passwd;
-	int cli_sockfd;
-	bool inGame = false;
-	bool turn = false;
-};//*/
 
 extern vector<user> users;
 
-bool isnum(string s){
-	for (unsigned int i = 0; i < s.size(); i++){
+
+// string utilitu
+bool isnum(string s) {
+	for (unsigned int i = 0; i < s.size(); i++)
 		if (!isdigit(s[i]))
 			return false;
-	}
 	return true;
 }
 
-vector<string> Split(string s){
+// string utility
+vector<string> Split(string s) {
 	vector<string> v;
 	stringstream ss;
 	string e;
 	ss << s;
 	ss >> e;
-	while (ss){
+	while (ss) {
 		v.push_back(e);
 		ss >> e;
 	}
-
-	v[v.size() - 1] = v[v.size() - 1].substr(0, v[v.size() - 1].size() - 1);
+	// v.back() = v.back().substr(0, v.back().size() - 1);
+	v.back().pop_back();
 	return v;
 }
 
-void SendToClient(user& u){
-	//Update client prompt. Use for noop commands.
-	if (u.online){
+// simple client prompt - no data
+void SendToClient(user& u) {
+	if (u.online) {
 		stringstream ss;
-		ss << "< telnet " << u.clientcounter << " >: ";
+		ss << "<" << u.name << ": " << u.clientcounter << "> ";
 		string msg = ss.str();
-		u.clientcounter = u.clientcounter + 1;
-		//strncpy(buf, msg.c_str(), msg.size());
-		write(u.cli_sockfd, msg.c_str(), msg.size());
-
-
-		cout << "Done sending message to client." << endl;
+		++u.clientcounter;
+		_write(u.cli_sockfd, msg.c_str(), msg.size());
 	}
 }
 
-bool SendToClient(user& u, string msg){
-	//Sends msg to user u from the server.
-	//u should contain client ID stuff so we can talk to them.
-	//I expect all the ports should just stay open while a user is connected.
+// sends actual response data to client
+bool SendToClient(user& u, string msg) {
+	// Sends msg to user u from the server.
+	int cpylen = 0;
+	int itr = 0;
+	const int msize = (const int) msg.size();
+	string subs;
 
-	//Format data
-	if (u.online){
-		if (msg.size() != 0){
-			int cpylen = 0;
-			int itr = 0;
+	if (u.online) {
+		if (msize > 0) {
 
-			const int msize = (const int) msg.size();
-
-
-			cout << "Message length = " << msg.size() << " characters." << endl;
+			if (DEBUG_LEV)
+				cout << "Message length = " << msg.size() << " characters.\n";
 			//Send data in 512 char chunks
-			while(itr < msize){
-				cout << "Beginning write loop." << endl;
-				string subs;
+			while(itr < msize) {
 
-				//for(int i = 0; i < cpylen; i++)
-				//	buf[i] = '\0';
+				if (DEBUG_LEV)
+					cout << "Beginning write loop." << endl;
 
 				if ((itr + 512) < (int)msg.size())
 					cpylen = 512;
-				else {
+				else
 					cpylen = msg.size() - itr;
-				}
 
 				subs = "";
-				for (int i = itr; i < itr + cpylen && i < msize; i++){
+				for (int i = itr; (i < itr + cpylen) && (i < msize); i++)
 					subs += msg[i];
-				}
 
-				//strncpy(buf, subs.c_str(), cpylen);
+				if (DEBUG_LEV)
+					cout << "Attempting to write " << cpylen
+						<< " characters (" << itr << " - " << itr + cpylen << ").\n";
 
-				cout << "Attempting to write " << cpylen << " characters (" << itr << " - " << itr + cpylen << ")." << endl;
-
-				//buf[strlen(buf)] = '\0';
-				//if(
-				write(u.cli_sockfd, subs.c_str(), subs.size());//)
-				//cout << "Written data." << endl;
+				_write(u.cli_sockfd, subs.c_str(), subs.size());
 
 				itr += 512;
-				cout << "End loop." << endl;
 			}
 		}
 
 		SendToClient(u);
-
 		return true;
 	}
 	return false;
 }
 
-bool SendToClient(string msg, user& u){
-	return SendToClient(u, msg);
+// send data to multiple users in string list
+void SendToClients(vector<string> ulist, string msg) {
+	for (unsigned int i = 0; i < ulist.size(); ++i)
+		for (unsigned int j = 0; j < users.size(); ++j)
+			if (ulist[i] == users[j].name)
+				SendToClient(users[j], msg);
 }
 
-bool SendToClient(string u, string msg){
-	for (int i = 0; i < users.size(); i++){
-		if (users[i].name == u){
-			SendToClient(users[i], msg);
-			return true;
-		}
-	}
-	return false;
-}
 
-bool Parse(string line, user& u){
+// interpret a msg from the user
+bool Parse(string line, user& u) {
 	vector<string> v = Split(line);
+	// line.pop_back();
 	line = line.substr(0, line.size() - 1);
+
+	stringstream ss; // use for output result
+	stringstream ss2;
+	user *oth_usr = 0; // use for other user
+
 	pthread_mutex_lock(&users_lock);
 
-	/*user &u = users[0];
-	bool found = false;
-
-	for (unsigned int i = 0; i < users.size(); i++)
-		if (users[i].name == uname){
-			u = users[i];
-			found = true;
-			break;
-		}
-
-	if (!found){
-		cout << "Error: " << uname << " is no longer a user.\n";
-		return true;
-	}*/
-
-	if (v[0].size() == 0){
-		string msg = "";
-		SendToClient(u); //Send to client new prompt
-		//noop
-	}
-	else if (v[0] == "who"){
-		//List online users
+	if (v[0].size() == 0); // Sends prompt only
+	else if (v[0] == "who" || v[0] == "whom") {
 		int nOnlineUsers = 0;
-		for (unsigned int i = 0; i < users.size(); i++){
-			if (users[i].online){
+		for (unsigned int i = 0; i < users.size(); i++)
+			if (users[i].online)
 				nOnlineUsers++;
-			}
-		}
 
-		stringstream ss;
-		ss << "Total " << to_string(nOnlineUsers) << " users currently online.\n";
+		ss << "Total of " << to_string(nOnlineUsers)
+			<< " user(s) currently online.\n";
 
-
-		for (unsigned int i = 0; i < users.size(); i++){
-			if (users[i].online){
+		for (unsigned int i = 0; i < users.size(); i++)
+			if (users[i].online)
 				ss << users[i].name << "\n";
+	}
+	else if (v[0] == "stats" || v[0] == "stat") {
+		bool found = false;
+		if (v.size() > 1) {
+			if (v[1] == "")
+				ss << u.stats();
+				// SendToClient(u, u.stats());
+			else {
+				vector<user>::iterator us;
+				for (us = users.begin(); us != users.end(); ++us)
+					if (us->name == v[1]) {
+						ss << us->stats();
+						// SendToClient(u, us->stats());
+						found = true;
+					}
+				if (!found)
+					ss << "User does not exist.\n";
+					// SendToClient(u, "User does not exist\n");
 			}
 		}
-
-		string msg = ss.str();
-		SendToClient(u, msg);
+		else
+			ss << u.stats();
 	}
-	else if (v[0] == "stats" && v.size() > 1){
-		//List information about user v[1]
-		user & us = users[0];
-		for (unsigned int i = 0; i < users.size(); i++){
-			us = users[i];
-			if (us.name == v[1])
-				break;
+	else if (v[0] == "game" || v[0] == "games") {
+		if (v.size() > 1) {
+			if (isnum(v[1])) {
+				if ((unsigned int) _stoi(v[1]) < games.size())
+					ss << games[_stoi(v[1])].metadata();
+				else
+					ss << "Invalid game id.\n";
+			}
+			else ss << show_games();
 		}
-
-		SendToClient(u, us.stats());
+		else ss << show_games();
 	}
-	else if (v[0] == "game"){
-		//List all running games (with id, players, etc)
+	else if (v[0] == "observe") {
+		if (v.size() < 2)
+			ss << u.observe(0);
+		else if (isnum(v[1]))
+			ss << u.observe(_stoi(v[1]));
+		else
+			ss << "observe <game_id>.\nEnter 'game' for game listing\n";
 	}
-	else if (v[0] == "observe" && v.size() > 1){
-		//Join game v[1] as observer
+	else if (v[0] == "unobserve") {
+		if (v.size() < 2)
+			ss << u.unobserve(-1);
+		else if (isnum(v[1]))
+			ss << u.unobserve(_stoi(v[1]));
+		else
+			ss << "unobserve <game_id>.\n";
 	}
-	else if (v[0] == "unobserve"){
-		//Unobserve most recently observed game. v[1] is optional gameID parameter
-	}
-	else if (v[0] == "match" && v.size() > 3){
-		//Attempt to start game with user v[1] as v[2]. Optional turn time is v[3].
-	}
-	/*else if (v[0].size() == 2 &&
-		(v[0][0] == 'A' || v[0][0] == 'B' || v[0][0] == 'C') &&
-		(v[0][1] == '0' || v[0][1] == '1' || v[0][1] == '2')){
-		if (u.playing && (u.match->player[turn%2] == u.name)){
-			//Make move
+	else if (v[0] == "match") {
+		ss << game_matcher(u, v, oth_usr);
+		if (oth_usr) {
+			ss2 << "\n" << u.name << " has accepted your match.\n"
+				<< "You are now playing in game " << (u.match)->id << "\n\n"
+				<< (u.match)->print_board() << "\n";
+			if (oth_usr->online)
+				SendToClient((*oth_usr), ss2.str());
 		}
-		else if (u.playing && !u.turn){
-			printf("Error: It is not your turn.\n");
-		}
-		else{
-			printf("Error: You are not in any games.\n");
-		}
-	}//*/
-	else if (v[0] == "resign"){
-		//Resign most recently started game. v[1] is optional gameID parameter.
 	}
-	else if (v[0] == "refresh"){
-		//Refresh the screen
+	else if (v[0] == "resign") {
+		ss << game_resign(u, &oth_usr); //************************PROBLEMS HERE*************************************
+		if (oth_usr) { // this was a valid request - inform opponent
+			ss2 << "\n" << u.name << " resigned.\n";
+			if (oth_usr->online)
+				SendToClient((*oth_usr), ss2.str());
+		}
 	}
-	else if (v[0] == "shout" && v.size() > 1){
+	else if (v[0] == "refresh") {
+		ss << u.game_update();
+	}
+	else if (v[0] == "shout" && v.size() > 1) {
 		string msg;
 		bool seenSpace = false;
-		for (unsigned int i = 0; i < line.size(); i++){
-			if (!seenSpace && line[i] == ' '){
+		for (unsigned int i = 0; i < line.size(); i++) {
+			if (!seenSpace && line[i] == ' ')
 				seenSpace = true;
-			}
-			else if (seenSpace){
+			else if (seenSpace)
 				msg += line[i];
-			}
 		}
-
-		//stringstream ss;
 		msg = "!!! " + u.name + " !!!: " + msg + "\n";
-		//ss >> msg;
-
-		for (unsigned int i = 0; i < users.size(); i++){
-			if (users[i].online){
+		for (unsigned int i = 0; i < users.size(); i++) {
+			if (users[i].online) { //Send msg to all from user u
 				if (users[i].name == u.name)
-					bool ret = SendToClient(users[i], msg);
-				else bool ret = SendToClient(users[i], "\n" + msg);
+					SendToClient(users[i], msg);
+				else SendToClient(users[i], "\n" + msg);
 			}
 		}
-		//Send msg to all from user u
 	}
-	else if (v[0] == "tell" && v.size() > 2){
+	else if (v[0] == "tell" && v.size() > 2) {
 		string msg;
 		bool seenSpace1 = false;
 		bool seenSpace2 = false;
-		for (unsigned int i = 0; i < line.size(); i++){
-			if (!seenSpace1 && line[i] == ' '){
+		for (unsigned int i = 0; i < line.size(); i++) {
+			if (!seenSpace1 && line[i] == ' ')
 				seenSpace1 = true;
-			}
-			else if (!seenSpace2 && line[i] == ' '){
+			else if (!seenSpace2 && line[i] == ' ')
 				seenSpace2 = true;
-			}
-			else if (seenSpace1 && seenSpace2){
+			else if (seenSpace1 && seenSpace2)
 				msg += line[i];
-			}
 		}
-
-
-		//stringstream ss;
 		msg = "### " + u.name + " ###: " + msg + "\n";
-		//ss >> msg;
-
-		for (unsigned int i = 0; i < users.size(); i++){
-			if (users[i].name == v[1]){
+		for (unsigned int i = 0; i < users.size(); i++) {
+			if (users[i].name == v[1]) { 	//Send msg to v[1] from u
 				string mymsg = msg;
 				if (users[i].name != u.name)
 					msg = "\n" + msg;
-				bool ret = SendToClient(users[i], msg);
+				SendToClient(users[i], msg);
 				break;
 			}
 		}
-
-		//Send msg to v[1] from u
 	}
-	else if ((v[0] == "kibitz" || v[0] == "'") &&
-		(isnum(v[1])) && v.size() > 3){
-		string msg;
-		bool seenSpace1 = false;
-		bool seenSpace2 = false;
-		for (unsigned int i = 0; i < line.size(); i++){
-			if (!seenSpace1 && line[i] == ' '){
-				seenSpace1 = true;
+	else if ((v[0] == "kibitz") || (v[0] == "'")) {
+		vector<game *> glist;
+		vector<game *>::iterator g;
+		vector<string> ulist;
+		if (v.size() < 2)
+			ss << "Ignoring empy message.\n";
+		else {
+			bool only_one = isnum(v[1]); // first check
+cerr << "--> " << only_one << "\n";
+			only_one &= ((unsigned int) _stoi(v[1]) >= games.size() + 1); // sec check
+cerr << "--> " << only_one << "\n";
+			only_one &= (v.size() > 2); // third check
+cerr << "--> " << only_one << "\n";
+			ss2 << "\n Kibitz* " << u.name << ": ";
+			if (only_one) {
+				ss2 << line.substr(v[0].length() + v[1].length() + 1, line.length() - 1) << "\n";
+				SendToClients(games[_stoi(v[1])].observing, ss2.str());
 			}
-			else if (!seenSpace2 && line[i] == ' '){
-				seenSpace2 = true;
-			}
-			else if (seenSpace1 && seenSpace2){
-				msg += line[i];
-			}
-		}
-
-		//Send msg to all observing game v[1] from u
-
-
-	}
-	else if ((v[0] == "kibitz" || v[0] == "'") && v.size() > 2){
-		string msg;
-		bool seenSpace = false;
-		for (unsigned int i = 0; i < line.size(); i++){
-			if (!seenSpace && line[i] == ' '){
-				seenSpace = true;
-			}
-			else if (seenSpace){
-				msg += line[i];
+			else {
+				ss2 << line.substr(v[0].length() + 1, line.length() - 1) << "\n";
+				for (g = u.watching.begin(); g != u.watching.end(); ++g)
+					SendToClients((*g)->observing, ss2.str());
 			}
 		}
-
-		//Send msg to all observing from user u
-
-		msg = "$$$ " + u.name + " $$$: " + msg + "\n";
-
-
 	}
-	else if (v[0] == "quiet"){
-		//Set u to quiet mode
+	else if (v[0] == "quiet") {
+		if (u.quiet)
+			ss << "You are already in quiet mode.\n";
+		else
+			ss << "You are now in quiet mode.\n";
 	}
-	else if (v[0] == "nonquiet"){
-		//Set u to not quiet mode
+	else if (v[0] == "nonquiet") {
+		if (!u.quiet)
+			ss << "You are already in nonquiet mode.\n";
+		else
+			ss << "You are now in nonquiet mode.\n";
 	}
-	else if (v[0] == "block" && v.size() > 1){
+	else if (v[0] == "block" && v.size() > 1) {
 		//Block v[1]
 	}
-	else if (v[0] == "ublock" && v.size() > 1){
+	else if (v[0] == "ublock" && v.size() > 1) {
 		//Unblock v[1]
 	}
-	else if (v[0] == "listmail"){
+	else if (v[0] == "listmail") {
 		//Print all mail headers for u
 	}
-	else if (v[0] == "readmail" && v.size() > 1){
+	else if (v[0] == "readmail" && v.size() > 1) {
 		//Print message v[1] for u
 	}
-	else if (v[0] == "deletemail" && v.size() > 1){
+	else if (v[0] == "deletemail" && v.size() > 1) {
 		//Delete message v[1] for u
 	}
-	else if (v[0] == "mail" && v.size() > 3){
+	else if (v[0] == "mail" && v.size() > 3) {
 		string msg;
 		bool seenSpace1 = false;
 		bool seenSpace2 = false;
@@ -382,7 +340,7 @@ bool Parse(string line, user& u){
 
 		//Send msg as mail to v[1] from u
 	}
-	else if (v[0] == "info" && v.size() > 1){
+	else if (v[0] == "info" && v.size() > 1) {
 		string msg;
 		bool seenSpace = false;
 		for (unsigned int i = 0; i < line.size(); i++){
@@ -396,40 +354,26 @@ bool Parse(string line, user& u){
 
 		//Set u's status to msg
 	}
-	else if (v[0] == "passwd" && v.size() > 1){
-		stringstream ss;
-		string msg;
+	else if (v[0] == "passwd" && v.size() > 1) {
 		bool set = false;
-
-
-
-		for (unsigned int i = 0; i < users.size(); i++){
-			if (users[i].name == u.name){
-				cout << "Set " << u.name << "\'s password to " << v[1] << "\n";
+		for (unsigned int i = 0; i < users.size(); i++)
+			if (users[i].name == u.name) {
+				if (DEBUG_LEV)
+					cout << "Set " << u.name << "\'s password to " << v[1] << "\n";
 				users[i].passwd = v[1];
 				set = true;
 				break;
 			}
-		}
-		if (set)
-			msg =  "Your password is now: " + v[1] + "\n";
-		else
-			msg =  "Could not update your password.\n";
-
-		SendToClient(u, msg);
-
-
-		//Set u's password to v[1]
+		if (set) ss << "Your password is now: " + v[1] + "\n";
+		else ss << "Could not update your password.\n";
 	}
-	else if (v[0] == "exit" || v[0] == "quit" || v[0] == "bye"){
+	else if (v[0] == "exit" || v[0] == "quit" || v[0] == "bye") {
 		u.online = false;
 		pthread_mutex_unlock(&users_lock);
 		return true;
 	}
-	else if (v[0] == "help" || v[0] == "?"){
-		stringstream ss;
-		string msg;
-		ss << left << setw(25) <<  "[...] optional field, <......> required field" << "\n"
+	else if (v[0] == "help" || v[0] == "?") {
+		ss <<  "\n[...] optional field\n<......> required field\n"
 		   << left << setw(25) <<  "who " 						<< "# List all online users" << "\n"
 		   << left << setw(25) <<  "stats [name] " 				<< "# Display user information" << "\n"
 		   << left << setw(25) <<  "game " 						<< "# list all current games" << "\n"
@@ -456,20 +400,16 @@ bool Parse(string line, user& u){
 		   << left << setw(25) <<  "exit " 						<< "# quit the system" << "\n"
 		   << left << setw(25) <<  "quit " 						<< "# quit the system" << "\n"
 		   << left << setw(25) <<  "help " 						<< "# print this message" << "\n"
-		   << left << setw(25) <<  "? " 						<< "# print this message" << "\n";
+		   << left << setw(25) <<  "? " 						<< "# print this message" << "\n\n";
 
-		msg = ss.str();
-		SendToClient(u, msg);
-
-		cout << "Done printing help." << "\n";
-		//Print help
+		if (DEBUG_LEV)
+			cout << "Done printing help." << "\n";
 	}
 	else{
-		string s = "Error: That is not a supported command.\r\n";
-		SendToClient(s.c_str(), u);
+		ss << "Error: That is not a supported command.\r\n";
 	}
-	//else if (v[0] == ""){}
 
+	SendToClient(u, ss.str());
 	pthread_mutex_unlock(&users_lock);
 	return false;
 }
