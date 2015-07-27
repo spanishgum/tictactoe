@@ -59,7 +59,7 @@ class mail {
 		// proceed to grab mail data
 		getline(form, data); m.id = _stoi(data);
 		getline(form, data); m.open = (bool) _stoi(data);
-    getline(form, data); m.title = data;
+		getline(form, data); m.title = data;
 		getline(form, data); m.from = data;
 		getline(form, data); m.timestamp = (time_t) _stoi(data);
 		m.body = form.str().substr(form.tellg()); // remainder will be the body
