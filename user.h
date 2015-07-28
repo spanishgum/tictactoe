@@ -17,6 +17,8 @@
 #include "mail.h"
 #include "game.h"
 
+#define BLOCK_LIM 10
+
 using namespace std;
 
 class user;
@@ -379,6 +381,8 @@ class user {
 					if (is_blocked(u))
 						return 0;
 					else {
+						if (blocked.size() > BLOCK_LIM)
+							return -2;
 						blocked.push_back(u);
 						return 1;
 					}
@@ -404,6 +408,17 @@ class user {
 
 
 		//****************** MAILING ***************************//
+		string mail_meta() {
+			stringstream ss;
+			int new_mail = 0;
+			for (unsigned int i = 0; i < inbox.size(); ++i)
+				if (!inbox[i].open) ++new_mail;
+			if (new_mail)
+				ss << "You have " << new_mail << " new messages in your inbox.\n";
+			else ss << "Inbox empty.\n";
+			return ss.str();
+		}
+
 		string list_mail() {
 			//vector<mail> iterator m;
 			string msg = "";
@@ -417,6 +432,7 @@ class user {
 			for (unsigned int m = 0; m < inbox.size(); ++m)
 				if (inbox[m].id == id) {
 					ss << inbox[m].read();
+					inbox[m].open = true;
 					return ss.str();
 				}
 			ss << "Message number invalid.\n";
@@ -479,10 +495,10 @@ string game_matcher(user &u, vector<string> v, user **other) {
 					ss << (u.match)->print_board();
 					*other = &(*usr);
 				}
-				break;
+				return ss.str();
 			}
-		if (v[1] != usr->name)
-			ss << v[1] << " is not a user.\n";
+
+		ss << v[1] << " is not a user.\n";
 	}
 	return ss.str();
 }
@@ -490,7 +506,9 @@ string game_matcher(user &u, vector<string> v, user **other) {
 string game_resign(user &u, user **other) {
 	stringstream ss;
 	int valid = 0;
-	int gid = (u.match)->id;
+	int gid = -1;
+	if (u.match)
+		gid = (u.match)->id;
 	string opp = u.get_oppon();
 	ss << u.quit_match(&valid);
 	vector<user>::iterator usr;
@@ -509,12 +527,14 @@ string game_resign(user &u, user **other) {
 
 void game_fin(user &u) {
 	bool won;
-	int gid = (u.match)->id;
+	int gid;
+	if (!u.match) return;
+	gid = (u.match)->id;
 	string opp = u.get_oppon();
 
 	if ((u.match)->winner == -1) won = -1;
-	else if ((u.match)->player[(u.match)->winner] == u.name) won = 1;
-	else won = 0;
+	else if ((u.match)->player[(u.match)->winner] == u.name) won = 0;
+	else won = 1;
 
 	vector<user>::iterator usr;
 	for (usr = users.begin(); usr != users.end(); ++usr)
@@ -535,8 +555,8 @@ void send_mail(user &u) {
 	vector<user>::iterator usr;
 	for (usr = users.begin(); usr != users.end(); ++usr)
 		if (usr->name == (u.outgoing)->to)
-			usr->add_mail(*u.outgoing);
-	u.outgoing = 0;
+			if (!usr->is_blocked(u.name))
+				usr->add_mail(*u.outgoing);
 }
 
 #endif
