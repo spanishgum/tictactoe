@@ -117,35 +117,73 @@ bool SendToClient(user& u, string msg) {
 			}
 		}
 
-		SendToClient(u);
+		if (!u.writing_mail)
+			SendToClient(u);
 		return true;
 	}
 	return false;
 }
 
-// send data to multiple users in string list
-void SendToClients(vector<string> ulist, string msg) {
+// send data to other users in string list
+void SendToClients(user &u, vector<string> ulist, string msg) {
 	for (unsigned int i = 0; i < ulist.size(); ++i)
 		for (unsigned int j = 0; j < users.size(); ++j)
 			if (ulist[i] == users[j].name)
-				SendToClient(users[j], msg);
+				if (ulist[i] != u.name)
+				 	SendToClient(users[j], "\n" + msg);
+}
+
+// read mail body data into user outgoing mail
+bool ParseBody(string line, user& u) {
+	stringstream ss;
+	line.back() = '\n';
+	pthread_mutex_lock(&users_lock);
+	if (u.outgoing) {
+		u.outgoing->body += line;
+		if (line == ".\n") {
+			u.writing_mail = false;
+			ss << "\n" << "Sending mail to " << u.outgoing->to << ".\n";
+			send_mail(u);
+			SendToClient(u, ss.str());
+		}
+	}
+	else {
+		u.writing_mail = false;
+		u.outgoing = 0;
+		cerr << "Client sync error when writing mail.\n";
+		ss << "Sorry, something seems to be wrong."
+			<<" We've lost your outgoing file.\n";
+		SendToClient(u, ss.str());
+	}
+	pthread_mutex_unlock(&users_lock);
+	return false;
 }
 
 
 // interpret a msg from the user
 bool Parse(string line, user& u) {
+	if (u.writing_mail) {
+		return ParseBody(line, u);
+	}
 	vector<string> v = Split(line);
-	// line.pop_back();
-	line = line.substr(0, line.size() - 1);
+	if (!line.empty()) line.pop_back();
+	line = line.substr(v[0].length());
+	if (v.size() > 1) line.substr(1);
 
-	stringstream ss; // use for output result
-	stringstream ss2;
-	user *oth_usr = 0; // use for other user
+	stringstream ss, ss2; // output to clients
+	unsigned int id = 0; // indexer
+	user *oth_usr = 0; // function ref params
+	vector<user>::iterator usr; // search user vects
+	vector<string>::iterator names; // search string vects
+
 
 	pthread_mutex_lock(&users_lock);
 
 	if (v[0].size() == 0); // Sends prompt only
-	else if (v[0] == "who" || v[0] == "whom") {
+	else if (v[0] == "cls" || v[0] == "clear") {
+		ss << "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n";
+	}
+	else if (v[0] == "who" || v[0] == "whom" || v[0] == "w") {
 		int nOnlineUsers = 0;
 		for (unsigned int i = 0; i < users.size(); i++)
 			if (users[i].online)
@@ -158,29 +196,25 @@ bool Parse(string line, user& u) {
 			if (users[i].online)
 				ss << users[i].name << "\n";
 	}
-	else if (v[0] == "stats" || v[0] == "stat") {
+	else if (v[0] == "stats" || v[0] == "stat" || v[0] == "s") {
 		bool found = false;
 		if (v.size() > 1) {
 			if (v[1] == "")
 				ss << u.stats();
-				// SendToClient(u, u.stats());
 			else {
-				vector<user>::iterator us;
-				for (us = users.begin(); us != users.end(); ++us)
-					if (us->name == v[1]) {
-						ss << us->stats();
-						// SendToClient(u, us->stats());
+				for (usr = users.begin(); usr != users.end(); ++usr)
+					if (usr->name == v[1]) {
+						ss << usr->stats();
 						found = true;
 					}
 				if (!found)
 					ss << "User does not exist.\n";
-					// SendToClient(u, "User does not exist\n");
 			}
 		}
 		else
 			ss << u.stats();
 	}
-	else if (v[0] == "game" || v[0] == "games") {
+	else if (v[0] == "game" || v[0] == "games" || v[0] == "g") {
 		if (v.size() > 1) {
 			if (isnum(v[1])) {
 				if ((unsigned int) _stoi(v[1]) < games.size())
@@ -192,7 +226,7 @@ bool Parse(string line, user& u) {
 		}
 		else ss << show_games();
 	}
-	else if (v[0] == "observe") {
+	else if (v[0] == "observe" || v[0] == "o") {
 		if (v.size() < 2)
 			ss << u.observe(0);
 		else if (isnum(v[1]))
@@ -200,7 +234,7 @@ bool Parse(string line, user& u) {
 		else
 			ss << "observe <game_id>.\nEnter 'game' for game listing\n";
 	}
-	else if (v[0] == "unobserve") {
+	else if (v[0] == "unobserve" || v[0] == "u") {
 		if (v.size() < 2)
 			ss << u.unobserve(-1);
 		else if (isnum(v[1]))
@@ -208,171 +242,231 @@ bool Parse(string line, user& u) {
 		else
 			ss << "unobserve <game_id>.\n";
 	}
-	else if (v[0] == "match") {
-		ss << game_matcher(u, v, oth_usr);
+	else if (v[0] == "match" || v[0] == "m") {
+		ss << game_matcher(u, v, &oth_usr);
 		if (oth_usr) {
-			ss2 << "\n" << u.name << " has accepted your match.\n"
-				<< "You are now playing in game " << (u.match)->id << "\n\n"
-				<< (u.match)->print_board() << "\n";
-			if (oth_usr->online)
+			if ((u.match)->pending) {
+				ss2 << "\n\n" << u.name << " has sent you a new match request!\n"
+					<< "To accept: match <";
+				if (u.name == (u.match)->player[0]) ss2 << "w";
+				else ss2 << "b";
+				ss2 << "> <" << (u.match)->timer[2] << ">\n"
+					<< "Or you modify the game details.\n\n";
 				SendToClient((*oth_usr), ss2.str());
-		}
-	}
-	else if (v[0] == "resign") {
-		ss << game_resign(u, &oth_usr); //************************PROBLEMS HERE*************************************
-		if (oth_usr) { // this was a valid request - inform opponent
-			ss2 << "\n" << u.name << " resigned.\n";
-			if (oth_usr->online)
-				SendToClient((*oth_usr), ss2.str());
-		}
-	}
-	else if (v[0] == "refresh") {
-		ss << u.game_update();
-	}
-	else if (v[0] == "shout" && v.size() > 1) {
-		string msg;
-		bool seenSpace = false;
-		for (unsigned int i = 0; i < line.size(); i++) {
-			if (!seenSpace && line[i] == ' ')
-				seenSpace = true;
-			else if (seenSpace)
-				msg += line[i];
-		}
-		msg = "!!! " + u.name + " !!!: " + msg + "\n";
-		for (unsigned int i = 0; i < users.size(); i++) {
-			if (users[i].online) { //Send msg to all from user u
-				if (users[i].name == u.name)
-					SendToClient(users[i], msg);
-				else SendToClient(users[i], "\n" + msg);
-			}
-		}
-	}
-	else if (v[0] == "tell" && v.size() > 2) {
-		string msg;
-		bool seenSpace1 = false;
-		bool seenSpace2 = false;
-		for (unsigned int i = 0; i < line.size(); i++) {
-			if (!seenSpace1 && line[i] == ' ')
-				seenSpace1 = true;
-			else if (!seenSpace2 && line[i] == ' ')
-				seenSpace2 = true;
-			else if (seenSpace1 && seenSpace2)
-				msg += line[i];
-		}
-		msg = "### " + u.name + " ###: " + msg + "\n";
-		for (unsigned int i = 0; i < users.size(); i++) {
-			if (users[i].name == v[1]) { 	//Send msg to v[1] from u
-				string mymsg = msg;
-				if (users[i].name != u.name)
-					msg = "\n" + msg;
-				SendToClient(users[i], msg);
-				break;
-			}
-		}
-	}
-	else if ((v[0] == "kibitz") || (v[0] == "'")) {
-		vector<game *> glist;
-		vector<game *>::iterator g;
-		vector<string> ulist;
-		if (v.size() < 2)
-			ss << "Ignoring empy message.\n";
-		else {
-			bool only_one = isnum(v[1]); // first check
-cerr << "--> " << only_one << "\n";
-			only_one &= ((unsigned int) _stoi(v[1]) >= games.size() + 1); // sec check
-cerr << "--> " << only_one << "\n";
-			only_one &= (v.size() > 2); // third check
-cerr << "--> " << only_one << "\n";
-			ss2 << "\n Kibitz* " << u.name << ": ";
-			if (only_one) {
-				ss2 << line.substr(v[0].length() + v[1].length() + 1, line.length() - 1) << "\n";
-				SendToClients(games[_stoi(v[1])].observing, ss2.str());
 			}
 			else {
-				ss2 << line.substr(v[0].length() + 1, line.length() - 1) << "\n";
-				for (g = u.watching.begin(); g != u.watching.end(); ++g)
-					SendToClients((*g)->observing, ss2.str());
+				ss2 << "\n" << u.name << " has accepted your match.\n"
+					<< "You are now playing in game " << (u.match)->id << "\n\n"
+					<< (u.match)->print_board() << "\n";
+				SendToClient((*oth_usr), ss2.str());
 			}
 		}
 	}
-	else if (v[0] == "quiet") {
+	else if (v[0] == "resign" || v[0] == "res") {
+		ss << game_resign(u, &oth_usr);
+		if (oth_usr) { // this was a valid request - inform opponent
+			ss2 << "\n" << u.name << " resigned.\n";
+			SendToClient((*oth_usr), ss2.str());
+		}
+	}
+	else if (v[0] == "refresh" || v[0] == "r") {
+		ss << u.game_update();
+	}
+	else if (v[0] == "shout" || v[0] == "sh") {
+		ss << "\n!!! " << u.name << " !!!: "
+			<< line << "\n\n";
+		for (unsigned int i = 0; i < users.size(); i++)
+			if (users[i].online) //Send msg to all from user u
+				if (users[i].name != u.name)
+					SendToClient(users[i], "\n" + ss.str());
+	}
+	else if (v[0] == "tell" || v[0] == "t") {
+		if (v.size() < 2) {
+			ss << "Usage: tell <user> <msg>\n";
+		}
+		else if (u.name == v[1])
+			ss << "Soo.. your talking to yourself now?\n";
+		else {
+			ss2 << "\n\n### " << u.name << " ###: "
+				<< line.substr(v[1].length() + 1) << "\n\n";
+			for (unsigned int i = 0; i < users.size(); i++)
+				if (users[i].online)
+					if (users[i].name == v[1])
+						SendToClient(users[i], ss2.str());
+		}
+	}
+	else if (v[0] == "kibitz" || v[0] == "k" || v[0] == "'") {
+		vector<game *>::iterator g;
+		if (v.size() < 2)
+			ss << "Ignoring empty message.\n";
+		else if (u.watching.empty())
+			ss << "You must be observing a game to do that.\n";
+		else {
+			bool only_one = isnum(v[1]); // first check
+			if (only_one) {
+				id = strtol(v[1].c_str(), NULL, 10);
+				only_one &= (id < games.size()); // sec check
+				only_one &= (v.size() > 2); // third check
+			}
+			else id = (u.watching[0])->id;
+			ss2 << "\n Kibitz* " << u.name << ": ";
+			if (only_one) {
+				ss2 << line.substr(v[1].length() + 1) << "\n\n";
+				SendToClients(u, games[id].observing, ss2.str());
+			}
+			else {
+				ss2 << line << "\n\n";
+				for (g = u.watching.begin(); g != u.watching.end(); ++g)
+					SendToClients(u, (*g)->observing, ss2.str());
+			}
+			ss << ss2.rdbuf();
+		}
+	}
+	else if (v[0] == "quiet" || v[0] == "q") {
 		if (u.quiet)
 			ss << "You are already in quiet mode.\n";
-		else
+		else {
+			u.quiet = true;
 			ss << "You are now in quiet mode.\n";
+		}
 	}
-	else if (v[0] == "nonquiet") {
+	else if (v[0] == "nonquiet" || v[0] == "nq") {
 		if (!u.quiet)
 			ss << "You are already in nonquiet mode.\n";
-		else
+		else {
+			u.quiet = false;
 			ss << "You are now in nonquiet mode.\n";
+		}
 	}
-	else if (v[0] == "block" && v.size() > 1) {
-		//Block v[1]
-	}
-	else if (v[0] == "ublock" && v.size() > 1) {
-		//Unblock v[1]
-	}
-	else if (v[0] == "listmail") {
-		//Print all mail headers for u
-	}
-	else if (v[0] == "readmail" && v.size() > 1) {
-		//Print message v[1] for u
-	}
-	else if (v[0] == "deletemail" && v.size() > 1) {
-		//Delete message v[1] for u
-	}
-	else if (v[0] == "mail" && v.size() > 3) {
-		string msg;
-		bool seenSpace1 = false;
-		bool seenSpace2 = false;
-		for (unsigned int i = 0; i < line.size(); i++){
-			if (!seenSpace1 && line[i] == ' '){
-				seenSpace1 = true;
-			}
-			else if (!seenSpace2 && line[i] == ' '){
-				seenSpace2 = true;
-			}
-			else if (seenSpace1 && seenSpace2){
-				msg += line[i];
+	else if (v[0] == "block" || v[0] == "b") {
+		if (v.size() < 2) {
+			ss << "\n Blocked users: ";
+			for (names = u.blocked.begin(); names != u.blocked.end(); ++names)
+				ss << *names << " ";
+			ss << "\n\n";
+		}
+		else if (v[1] == u.name) {
+			ss << "You can't block yourself.\n";
+		}
+		else {
+			switch(u.block(v[1])) {
+				case -1:
+					ss << "User " << v[1] << " does not exist.\n";
+					break;
+				case 0:
+					ss << "You are already blocking " << v[1] << ".\n";
+					break;
+				case 1:
+					ss << "User " << v[1] << " blocked.\n";
+					break;
+				default:
+					break;
 			}
 		}
-
-		//Send msg as mail to v[1] from u
 	}
-	else if (v[0] == "info" && v.size() > 1) {
-		string msg;
-		bool seenSpace = false;
-		for (unsigned int i = 0; i < line.size(); i++){
-			if (!seenSpace && line[i] == ' '){
-				seenSpace = true;
-			}
-			else if (seenSpace){
-				msg += line[i];
+	else if (v[0] == "unblock" || v[0] == "ub") {
+		if (v.size() < 2) {
+			ss << "Usage: unblock <user>\n";
+		}
+		else if (v[1] == u.name) {
+			ss << "You can't (un)block yourself.\n";
+		}
+		else {
+			switch(u.unblock(v[1])) {
+				case -1:
+					ss << "User " << v[1] << " does not exist.\n";
+					break;
+				case 0:
+					ss << "You are not blocking " << v[1] << ".\n";
+					break;
+				case 1:
+					ss << "User " << v[1] << " unblocked.\n";
+					break;
+				default:
+					break;
 			}
 		}
-
-		//Set u's status to msg
 	}
-	else if (v[0] == "passwd" && v.size() > 1) {
+	else if (v[0] == "listmail" || v[0] == "lm") {
+		if (u.inbox.size())
+			ss << u.list_mail();
+		else
+			ss << "Mailbox empty.\n";
+	}
+	else if (v[0] == "readmail" || v[0] == "rm") {
+		id = 0;
+		if (v.size() > 1) {
+			if (isnum(v[1])) id = strtol(v[1].c_str(), NULL, 10);
+			if (u.inbox.size() < id) id = 0;
+		}
+		if (u.inbox.size())
+			ss << u.read_mail(id);
+		else
+			ss << "Mailbox empty.\n";
+	}
+	else if (v[0] == "deletemail" || v[0] == "dm") {
+		if (v.size() < 2)
+			ss << "Usage: deletemail <m_id>\n";
+		else {
+			if (isnum(v[1])) {
+				id = strtol(v[1].c_str(), NULL, 10);
+				if (u.del_mail(id))
+					ss << "Message deleted.\n";
+				else
+					ss << "Invalid message number.\n";
+			}
+			else
+				ss << "Usage: deletemail <m_id>\n";
+		}
+	}
+	else if (v[0] == "mail" || v[0] == "ml") {
+		if(v.size() < 2)
+			ss << "Usage: mail <user> <title>\n";
+		else {
+			for (usr = users.begin(); usr != users.end(); ++usr)
+				if (usr->name == v[1]) {
+					u.writing_mail = true;
+					u.outgoing = new mail("", u.name, "", v[1]);
+					if (v.size() > 2)
+						(u.outgoing)->title = line.substr(v[1].length() + 1);
+					ss << "\nPlease input mail body, finishing with '.' "
+						<< "at the beginning of a line.\n\n\n";
+					break;
+				}
+			if (!u.writing_mail)
+				ss << "User " << v[1] << " does not exist.\n";
+		}
+	}
+	else if (v[0] == "info" || v[0] == "i") {
+		if (v.size() < 2)
+			u.info = "";
+		else u.info = line;
+		ss << "Info changed.\n";
+	}
+	else if (v[0] == "passwd" || v[0] == "pswd") {
 		bool set = false;
-		for (unsigned int i = 0; i < users.size(); i++)
-			if (users[i].name == u.name) {
-				if (DEBUG_LEV)
-					cout << "Set " << u.name << "\'s password to " << v[1] << "\n";
-				users[i].passwd = v[1];
-				set = true;
-				break;
-			}
-		if (set) ss << "Your password is now: " + v[1] + "\n";
-		else ss << "Could not update your password.\n";
+		if (v.size() < 2)
+			ss << "\nUsage: passwd <text>\n"
+				<< "Note: <text> may not contain whitespace.\n\n";
+		else {
+			for (unsigned int i = 0; i < users.size(); i++)
+				if (users[i].name == u.name) {
+					if (DEBUG_LEV)
+						cout << "Set " << u.name << "\'s password to " << v[1] << "\n";
+					users[i].passwd = v[1];
+					set = true;
+					break;
+				}
+			if (set) ss << "Your password is now: " + v[1] + "\n";
+			else ss << "Could not update your password.\n";
+		}
 	}
 	else if (v[0] == "exit" || v[0] == "quit" || v[0] == "bye") {
 		u.online = false;
 		pthread_mutex_unlock(&users_lock);
 		return true;
 	}
-	else if (v[0] == "help" || v[0] == "?") {
+	else if (v[0] == "help" || v[0] == "h" || v[0] == "?") {
 		ss <<  "\n[...] optional field\n<......> required field\n"
 		   << left << setw(25) <<  "who " 						<< "# List all online users" << "\n"
 		   << left << setw(25) <<  "stats [name] " 				<< "# Display user information" << "\n"
@@ -405,7 +499,13 @@ cerr << "--> " << only_one << "\n";
 		if (DEBUG_LEV)
 			cout << "Done printing help." << "\n";
 	}
-	else{
+	else if (v[0].length() == 2) {
+		ss << u.move(v[0]);
+		if (u.match)
+			if ((u.match)->fin)
+				game_fin(u);
+	}
+	else {
 		ss << "Error: That is not a supported command.\r\n";
 	}
 
