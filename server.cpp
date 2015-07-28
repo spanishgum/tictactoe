@@ -59,6 +59,37 @@ string ClientGet(int cli_sockfd) {
   return str;
 }
 
+
+void *scheduled_maintenance(void *arg) {
+  time_t stopwatch = 0, abs_time = time(NULL);
+  cerr << "Server maintenance thread initiated.\n";
+
+  do {
+    pthread_mutex_lock(&accept_lock);
+    if (exit_sequence) break;
+    pthread_mutex_unlock(&accept_lock);
+
+    stopwatch += difftime(time(NULL), abs_time);
+    abs_time = time(NULL);
+
+    if (stopwatch > 300) {
+      pthread_mutex_lock(&games_lock);
+      pthread_mutex_lock(&users_lock);
+      cerr << "Initiating scheduled server backup.\n";
+      save_server();
+      cerr << "Backup complete.\n";
+      pthread_mutex_lock(&games_lock);
+      pthread_mutex_lock(&users_lock);
+      stopwatch = 0;
+    }
+    sleep(25);
+  } while (1);
+
+  cerr << "Server maintenance thread exiting.\n";
+  pthread_exit(0);
+}
+
+
 void *one_thread(void *arg) {
   int cli_sockfd;
   struct sockaddr_in cli_addr;
@@ -295,7 +326,9 @@ void *one_thread(void *arg) {
 	    cerr << "Getting new connection.\n";
 
   	close(cli_sockfd);
+    pthread_mutex_lock(&accept_lock);
     if (exit_sequence) break;
+    pthread_mutex_unlock(&accept_lock);
   }
 
   cerr << "Pthread " << tid << " exiting.\n";
@@ -342,20 +375,26 @@ int main(int argc, char *argv[]) {
   	pthread_create(&tid, NULL, &one_thread, (void *)tid_ptr);
     cout << "thread " << i << " created\n" << flush;
   }
+  pthread_create(&tid, NULL, &scheduled_maintenance, (void *)NULL);
+
 
   for (;;) {
     string line;
     getline(cin, line);
     if (line.compare("quit") == 0 || line.compare("exit") == 0) {
       cout << "Initiating server shut down sequence.\n";
+      pthread_mutex_lock(&accept_lock);
       exit_sequence = true;
+      pthread_mutex_unlock(&accept_lock);
       break;
     }
   }
 
+  pthread_mutex_lock(&games_lock);
   pthread_mutex_lock(&users_lock);
   save_server();
   pthread_mutex_unlock(&users_lock);
+  pthread_mutex_unlock(&games_lock);
 
   return 0;
 }
