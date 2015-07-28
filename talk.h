@@ -124,18 +124,37 @@ bool SendToClient(user& u, string msg) {
 	return false;
 }
 
-// send data to other users in string list
+// search by string name then send - unless blocked
+void SendToClient(string uname, string msg, user &usr) {
+	vector<user>::iterator u;
+	for (u = users.begin(); u != users.end(); ++u)
+		if (u->name == uname)
+			if (!u->is_blocked(usr.name))
+				SendToClient(*u, msg);
+}
+
+// search by string name then send - no exceptions
+void SendToClient(string uname, string msg) {
+	vector<user>::iterator u;
+	for (u = users.begin(); u != users.end(); ++u)
+		if (u->name == uname)
+			SendToClient(*u, msg);
+}
+
+// send data to other users in string list - used by kibitz
 void SendToClients(user &u, vector<string> ulist, string msg) {
 	for (unsigned int i = 0; i < ulist.size(); ++i)
 		for (unsigned int j = 0; j < users.size(); ++j)
 			if (ulist[i] == users[j].name)
 				if (ulist[i] != u.name)
-				 	SendToClient(users[j], "\n" + msg);
+					if (!users[j].quiet)
+						if (!users[j].is_blocked(u.name))
+				 			SendToClient(users[j], "\n" + msg);
 }
 
 // read mail body data into user outgoing mail
 bool ParseBody(string line, user& u) {
-	stringstream ss;
+	stringstream ss, ss2;
 	line.back() = '\n';
 	pthread_mutex_lock(&users_lock);
 	if (u.outgoing) {
@@ -143,8 +162,12 @@ bool ParseBody(string line, user& u) {
 		if (line == ".\n") {
 			u.writing_mail = false;
 			ss << "\n" << "Sending mail to " << u.outgoing->to << ".\n";
+			ss2 << "\n\n" << "New message from " << u.name << "!\n\n";
 			send_mail(u);
+			SendToClient(u.outgoing->to, ss2.str(), u);
 			SendToClient(u, ss.str());
+			delete u.outgoing;
+			u.outgoing = 0;
 		}
 	}
 	else {
@@ -167,8 +190,9 @@ bool Parse(string line, user& u) {
 	}
 	vector<string> v = Split(line);
 	if (!line.empty()) line.pop_back();
-	line = line.substr(v[0].length());
-	if (v.size() > 1) line.substr(1);
+	if (v.size() < 2) line = line.substr(v[0].length());
+	else line = line.substr(v[0].length() + 1);
+	// if (v.size() > 1) line = line.substr(1);
 
 	stringstream ss, ss2; // output to clients
 	unsigned int id = 0; // indexer
@@ -181,7 +205,7 @@ bool Parse(string line, user& u) {
 
 	if (v[0].size() == 0); // Sends prompt only
 	else if (v[0] == "cls" || v[0] == "clear") {
-		ss << "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n";
+		ss << "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n";
 	}
 	else if (v[0] == "who" || v[0] == "whom" || v[0] == "w") {
 		int nOnlineUsers = 0;
@@ -189,12 +213,12 @@ bool Parse(string line, user& u) {
 			if (users[i].online)
 				nOnlineUsers++;
 
-		ss << "Total of " << to_string(nOnlineUsers)
+		ss << "\nTotal of " << to_string(nOnlineUsers)
 			<< " user(s) currently online.\n";
 
 		for (unsigned int i = 0; i < users.size(); i++)
 			if (users[i].online)
-				ss << users[i].name << "\n";
+				ss << " " << users[i].name << "\n";
 	}
 	else if (v[0] == "stats" || v[0] == "stat" || v[0] == "s") {
 		bool found = false;
@@ -250,7 +274,7 @@ bool Parse(string line, user& u) {
 					<< "To accept: match <";
 				if (u.name == (u.match)->player[0]) ss2 << "w";
 				else ss2 << "b";
-				ss2 << "> <" << (u.match)->timer[2] << ">\n"
+				ss2 << "> <" << (u.match)->timer[1] << ">\n"
 					<< "Or you modify the game details.\n\n";
 				SendToClient((*oth_usr), ss2.str());
 			}
@@ -271,14 +295,25 @@ bool Parse(string line, user& u) {
 	}
 	else if (v[0] == "refresh" || v[0] == "r") {
 		ss << u.game_update();
+		if (u.match) {
+			string opp = u.get_oppon();
+			for (unsigned int i = 0; i < users.size(); ++i)
+				if (users[i].name == opp)
+					if (!users[i].online) {
+						ss << "\n\nOpponent logged out, you win!\n";
+						game_fin(u);
+					}
+		}
 	}
 	else if (v[0] == "shout" || v[0] == "sh") {
 		ss << "\n!!! " << u.name << " !!!: "
 			<< line << "\n\n";
 		for (unsigned int i = 0; i < users.size(); i++)
-			if (users[i].online) //Send msg to all from user u
-				if (users[i].name != u.name)
-					SendToClient(users[i], "\n" + ss.str());
+			if (users[i].online)
+				if (!users[i].quiet)
+					if (users[i].name != u.name)
+						if (!users[i].is_blocked(u.name))
+							SendToClient(users[i], "\n" + ss.str());
 	}
 	else if (v[0] == "tell" || v[0] == "t") {
 		if (v.size() < 2) {
@@ -292,7 +327,8 @@ bool Parse(string line, user& u) {
 			for (unsigned int i = 0; i < users.size(); i++)
 				if (users[i].online)
 					if (users[i].name == v[1])
-						SendToClient(users[i], ss2.str());
+						if (!users[i].is_blocked(u.name))
+							SendToClient(users[i], ss2.str());
 		}
 	}
 	else if (v[0] == "kibitz" || v[0] == "k" || v[0] == "'") {
@@ -350,6 +386,9 @@ bool Parse(string line, user& u) {
 		}
 		else {
 			switch(u.block(v[1])) {
+				case -2:
+					ss << "You have reached your blocking limit.\n";
+					break;
 				case -1:
 					ss << "User " << v[1] << " does not exist.\n";
 					break;
@@ -500,10 +539,24 @@ bool Parse(string line, user& u) {
 			cout << "Done printing help." << "\n";
 	}
 	else if (v[0].length() == 2) {
+		string opp = u.get_oppon();
 		ss << u.move(v[0]);
-		if (u.match)
-			if ((u.match)->fin)
+		ss2 << (u.match)->print_board() << "\n";
+		if (u.match) {
+			if ((u.match)->fin){
 				game_fin(u);
+				ss2 << "\nBetter luck next time.\n" << u.name << " won the game.\n";
+			}
+			else {
+				for (unsigned int i = 0; i < users.size(); ++i)
+					if (users[i].name == opp)
+						if (!users[i].online) {
+							ss << "Opponent logged out, you win!\n";
+							game_fin(u);
+						}
+			}
+		}
+		SendToClient(opp, ss2.str());
 	}
 	else {
 		ss << "Error: That is not a supported command.\r\n";
