@@ -37,8 +37,10 @@ class user {
 		vector<string> blocked;
 		vector<game *> watching;
 		vector<mail> inbox;
+		mail *outgoing; // could have done full outbox - kept simple
 		game *match;
 		bool playing;
+		bool writing_mail;
 
 		int clientcounter;
 		int cli_sockfd;
@@ -83,6 +85,8 @@ class user {
 			// init values not in file
 			u.playing = false;
 			u.match = 0;
+			u.online = 0;
+			u.outgoing = 0;
 			u.clientcounter = 0;
 
 			// grab user form
@@ -105,19 +109,24 @@ class user {
 			getline(form, data); u.info = data;
 			getline(form, data); u.wins = _stoi(data);
 			getline(form, data); u.loses = _stoi(data);
-			u.rating = (double)u.wins / (u.wins + u.loses);
+			if ((u.wins + u.loses) == 0) u.rating = 0.00;
+			else u.rating = (double)u.wins / (u.wins + u.loses);
 			getline(form, data); u.quiet = (bool) _stoi(data);
 
 			// input blocked list
 			getline(form, data); // line contains blocked users
 			tmp << data; // put line into stream
-			while (getline(tmp, data, ' ')) // tokenize
+			tmp >> sub_data;
+			while (tmp) { // tokenize
 				u.blocked.push_back(data);
+				tmp >> sub_data;
+			}
 
 			// input mail data
 			getline(form, data); num_msgs = _stoi(data);
 			for (unsigned int i = 0; i < num_msgs; ++i) {
 				form >> m;
+				m.id = u.inbox.size();
 				u.inbox.push_back(m);
 			}
 
@@ -129,8 +138,10 @@ class user {
 				return ifs;
 			}
 
+
 			return ifs;
 		}
+
 
 
 		//****************** UTILITIES *************************//
@@ -147,16 +158,32 @@ class user {
 			return stoi(sub);
 		}
 
+		vector<string> Split(string s) {
+			vector<string> v;
+			stringstream ss;
+			string e;
+			ss << s;
+			ss >> e;
+			while (ss) {
+				v.push_back(e);
+				ss >> e;
+			}
+			// v.back() = v.back().substr(0, v.back().size() - 1);
+			v.back().pop_back();
+			return v;
+		}
+
+
 
 		//****************** CONSTRUCTOR ***********************//
 		user(string u_name = "", string u_passwd = "") {
 			name = u_name;
 			passwd = u_passwd;
 			info = "";
-			rating = wins = loses = quiet = 0;
-			clientcounter = 0;
-			online = false;
+			rating = wins = loses = clientcounter = 0;
 			match = 0;
+			outgoing = 0;
+			quiet = online = playing = writing_mail = false;
 		}
 
 
@@ -189,14 +216,9 @@ class user {
 		//****************** GAMING ****************************//
 		int req_match(vector<string> v) {
 			int req = g_request(name, v);
-			switch (req) {
-				case -1: // pending
-					break;
-				default: // game_id
-					accept_match(&games[req]);
-					break;
-			}
-			return req;
+			accept_match(&games[req]);
+			if (match->pending) return -1;
+			else return req;
 		}
 
 		void accept_match(game *g) {
@@ -213,7 +235,7 @@ class user {
 				if (match == NULL) {
 					cerr << "Warning: User object out of sync.\n"
 						<< "\tUpdating gaming status.\n";
-						playing = false;
+					playing = false;
 					ss << "You are not currently in a match.\n";
 				}
 				else { // playing set, match exists
@@ -242,13 +264,25 @@ class user {
 		string unobserve(int gid) {
 			stringstream ss;
 			vector<game *>::iterator g;
+			if (match && playing)
+				if (match->id == gid) {
+					ss << "You can not unobserve your own game.\n";
+					return ss.str();
+				}
 			if (gid == -1) {
 				if (watching.empty())
 					ss << "You are not observing anything\n";
 				else {
-					g = watching.begin();
-					ss << (*g)->rem_observer(name);
-					watching.erase(g);
+					for(g = watching.begin(); g != watching.end(); ++g) {
+						if (match) {
+							if (match->id == (*g)->id) continue;
+						}
+						else {
+							ss << (*g)->rem_observer(name);
+							watching.erase(g);
+							break;
+						}
+					}
 				}
 			}
 			else {
@@ -293,9 +327,9 @@ class user {
 		string get_oppon() {
 			if (playing && match) {
 				if (match->player[0] == name)
-					return match->player[0];
-				else
 					return match->player[1];
+				else
+					return match->player[0];
 			}
 			return "";
 		}
@@ -304,12 +338,29 @@ class user {
 			playing = false;
 			vector<game *>::iterator g;
 			for (g = watching.begin(); g != watching.end(); ++g)
-				if (*g == match) watching.erase(g);
+				if (*g == match) {
+					watching.erase(g);
+					break;
+				}
 			match = 0;
 			if (won == 1) ++wins;
 			else if (won == 0) ++loses;
 			rating = (double) wins / (wins + loses);
 		}
+
+		string move(string input) {
+			stringstream ss;
+			if (!playing)
+				ss << "You are not currently playing a game.\n";
+			else if (!match) {
+				cerr << "Warning, client game match may be out of sync.\n";
+				ss << "You are not currently playing a game.\n";
+			}
+			else
+				ss << match->move(name, input);
+			return ss.str();
+		}
+
 
 
 		//****************** BLOCKING **************************//
@@ -322,17 +373,31 @@ class user {
 			return false;
 		}
 
-		int block(user u) {
+		int block(string u) {
 			for (unsigned int i = 0; i < users.size(); ++i) {
-				if (u.name == users[i].name) {
-					if (is_blocked(u.name))
+				if (u == users[i].name) {
+					if (is_blocked(u))
 						return 0;
 					else {
-						blocked.push_back(u.name);
+						blocked.push_back(u);
 						return 1;
 					}
 				}
 			}
+			return -1;
+		}
+
+		int unblock(string u) {
+			for (unsigned int i = 0; i < users.size(); ++i)
+				if (users[i].name == u) {
+					for (unsigned int j = 0; j < blocked.size(); ++j) {
+						if (u == blocked[j]) {
+							blocked.erase(blocked.begin() + j);
+							return 1;
+						}
+					}
+					return 0;
+				}
 			return -1;
 		}
 
@@ -354,7 +419,7 @@ class user {
 					ss << inbox[m].read();
 					return ss.str();
 				}
-			ss << "Message number invalid\n";
+			ss << "Message number invalid.\n";
 			return ss.str();
 		}
 
@@ -377,10 +442,19 @@ class user {
 		}
 
 
+
 };
 
 
-string game_matcher(user &u, vector<string> v, user *other) {
+//************** GLOBAL USER UTILITIES *******************//
+void clr_observers(int gid) {
+	vector<user>::iterator u;
+	for (u = users.begin(); u != users.end(); ++u)
+		if (u->is_watching(gid))
+			u->unobserve(gid);
+}
+
+string game_matcher(user &u, vector<string> v, user **other) {
 	stringstream ss;
 	if (v.size() < 2)
 		ss << "match <user> <b|w> <t>\n";
@@ -394,12 +468,16 @@ string game_matcher(user &u, vector<string> v, user *other) {
 			if (v[1] == usr->name) {
 				if (usr->online == false)
 					ss << "User " << usr->name << " is not online.\n";
-				else if (u.req_match(v) == -1)
+				else if (u.req_match(v) == -1) {
 					ss << "sent game request to " << v[1] << "\n";
+					*other = &(*usr);
+				}
 				else { // initiate game for second player
 					usr->accept_match(u.match);
+					ss << "You have accepted the match.\n"
+						<< "You are now playing in game " << (u.match)->id << "\n\n";
 					ss << (u.match)->print_board();
-					other = &(*usr);
+					*other = &(*usr);
 				}
 				break;
 			}
@@ -409,23 +487,56 @@ string game_matcher(user &u, vector<string> v, user *other) {
 	return ss.str();
 }
 
-
-string game_resign(user &u, user **oth) {
+string game_resign(user &u, user **other) {
 	stringstream ss;
 	int valid = 0;
-	*oth = 0;
+	int gid = (u.match)->id;
 	string opp = u.get_oppon();
 	ss << u.quit_match(&valid);
 	vector<user>::iterator usr;
 	if (valid) {
 		for (usr = users.begin(); usr != users.end(); ++usr)
 			if (opp == usr->name) {
-				*oth = &(*usr);
-				(*oth)->clear_game(1);
+				*other = &(*usr);
+				(*other)->clear_game(1);
 				break;
 			}
 	}
+	clr_observers(gid);
+	rem_game(gid);
 	return ss.str();
+}
+
+void game_fin(user &u) {
+	bool won;
+	int gid = (u.match)->id;
+	string opp = u.get_oppon();
+
+	if ((u.match)->winner == -1) won = -1;
+	else if ((u.match)->player[(u.match)->winner] == u.name) won = 1;
+	else won = 0;
+
+	vector<user>::iterator usr;
+	for (usr = users.begin(); usr != users.end(); ++usr)
+		if (opp == usr->name) {
+			usr->clear_game(!won);
+			break;
+		}
+	if (opp != usr->name)
+		cerr << "Warning: game data may be out of sync.\n";
+	u.clear_game(won);
+	clr_observers(gid);
+	rem_game(gid);
+}
+
+
+void send_mail(user &u) {
+	if (u.writing_mail || !u.outgoing) return;
+	vector<user>::iterator usr;
+	for (usr = users.begin(); usr != users.end(); ++usr)
+		if (usr->name == (u.outgoing)->to)
+			usr->add_mail(*u.outgoing);
+	u.outgoing = 0;
 }
 
 #endif
