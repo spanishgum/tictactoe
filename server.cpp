@@ -41,6 +41,7 @@ extern vector<user> users;
 
 static bool exit_sequence = false;
 
+static int *cli_sockfds;
 
 string ClientGet(int cli_sockfd) {
   int n;
@@ -65,33 +66,31 @@ void *scheduled_maintenance(void *arg) {
   cerr << "Server maintenance thread initiated.\n";
 
   do {
-    pthread_mutex_lock(&accept_lock);
+    pthread_mutex_lock(&users_lock);
     if (exit_sequence) break;
-    pthread_mutex_unlock(&accept_lock);
+    pthread_mutex_unlock(&users_lock);
 
     stopwatch += difftime(time(NULL), abs_time);
     abs_time = time(NULL);
 
     if (stopwatch > 300) {
-      pthread_mutex_lock(&games_lock);
       pthread_mutex_lock(&users_lock);
       cerr << "Initiating scheduled server backup.\n";
       save_server();
       cerr << "Backup complete.\n";
-      pthread_mutex_lock(&games_lock);
-      pthread_mutex_lock(&users_lock);
+      pthread_mutex_unlock(&users_lock);
       stopwatch = 0;
     }
-    sleep(25);
+    sleep(5);
   } while (1);
 
-  cerr << "Server maintenance thread exiting.\n";
+  cerr << "Data management thread exited.\n";
   pthread_exit(0);
 }
 
 
 void *one_thread(void *arg) {
-  int cli_sockfd;
+  int & cli_sockfd = cli_sockfds[*((int *)arg)];
   struct sockaddr_in cli_addr;
   socklen_t sock_len;
   int tid = *((int *)arg);
@@ -118,6 +117,10 @@ void *one_thread(void *arg) {
     bool nousr = true, logout = false, loggedin = false;
 
     do {
+
+      pthread_mutex_lock(&users_lock);
+      if (exit_sequence) break;
+      pthread_mutex_unlock(&users_lock);
 
       if (loggedin) {
         cout << "Thread " << tid << ": Recieved " << n
@@ -192,16 +195,16 @@ void *one_thread(void *arg) {
           for (unsigned int i = 0; i < users.size() && !loggedin; i++) {
             if (users[i].name == uname) {
               nousr = false;
-
               if (users[i].passwd == psswrd) {
                 usr = &users[i];
                 msg = "You are now logged in as " + uname + "\n";
+                msg += usr->mail_meta();
 
                 users[i].cli_sockfd = cli_sockfd;
                 users[i].online = true;
                 users[i].clientcounter = 0;
 
-                if(SendToClient(*usr, msg));
+                SendToClient(*usr, msg);
                 loggedin = true;
               }
               else {
@@ -209,7 +212,6 @@ void *one_thread(void *arg) {
                 _write(cli_sockfd, msg.c_str(), strlen(msg.c_str()));
                 logout = true;
               }
-
               break;
             }
           }
@@ -312,6 +314,9 @@ void *one_thread(void *arg) {
           }
         }
       }
+      pthread_mutex_lock(&users_lock);
+      if (exit_sequence) break;
+      pthread_mutex_unlock(&users_lock);
 
     } while (loggedin && !logout && ((n = read(cli_sockfd, buf, MAXBUFLEN)) > 0));
 
@@ -326,19 +331,24 @@ void *one_thread(void *arg) {
 	    cerr << "Getting new connection.\n";
 
   	close(cli_sockfd);
-    pthread_mutex_lock(&accept_lock);
+    pthread_mutex_lock(&users_lock);
     if (exit_sequence) break;
-    pthread_mutex_unlock(&accept_lock);
+    pthread_mutex_unlock(&users_lock);
   }
 
-  cerr << "Pthread " << tid << " exiting.\n";
+  cerr << "Thread " << tid << " exited.\n";
   pthread_exit(0); // happens at exit sequence
 }
+
+
+
+
+
 
 int main(int argc, char *argv[]) {
   struct sockaddr_in serv_addr;
   int port, number_thread;
-  pthread_t tid;
+  pthread_t *tid;
   int *tid_ptr;
   string response;
 
@@ -369,13 +379,16 @@ int main(int argc, char *argv[]) {
   bind(serv_sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
   listen(serv_sockfd, 5);
 
+
+  tid = new pthread_t[number_thread + 1];
+  cli_sockfds = new int[number_thread];
   for (int i = 0; i < number_thread; ++i) {
   	tid_ptr = new int;
   	*tid_ptr = i;
-  	pthread_create(&tid, NULL, &one_thread, (void *)tid_ptr);
+  	pthread_create(&tid[i], NULL, &one_thread, (void *)tid_ptr);
     cout << "thread " << i << " created\n" << flush;
   }
-  pthread_create(&tid, NULL, &scheduled_maintenance, (void *)NULL);
+  pthread_create(&tid[number_thread], NULL, &scheduled_maintenance, (void *)NULL);
 
 
   for (;;) {
@@ -383,18 +396,27 @@ int main(int argc, char *argv[]) {
     getline(cin, line);
     if (line.compare("quit") == 0 || line.compare("exit") == 0) {
       cout << "Initiating server shut down sequence.\n";
-      pthread_mutex_lock(&accept_lock);
+
+      pthread_mutex_lock(&users_lock);
       exit_sequence = true;
-      pthread_mutex_unlock(&accept_lock);
+      pthread_mutex_unlock(&users_lock);
       break;
     }
   }
 
-  pthread_mutex_lock(&games_lock);
-  pthread_mutex_lock(&users_lock);
-  save_server();
-  pthread_mutex_unlock(&users_lock);
-  pthread_mutex_unlock(&games_lock);
+  shutdown(serv_sockfd, SHUT_RDWR);
+  close(serv_sockfd);
+  // shut down all recv sockets
+  for (int i = 0; i < number_thread; ++i) {
+    shutdown(cli_sockfds[i], SHUT_RDWR);
+    close(cli_sockfds[i]);
+  }
 
+  // wait for client children
+  // for(int i = 0; i < number_thread + 1; ++i)
+  //   pthread_join(tid[i], NULL);
+
+  // final save
+  save_server();
   return 0;
 }
