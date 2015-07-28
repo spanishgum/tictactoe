@@ -37,7 +37,7 @@ class game {
 		bool pending;
 		string requester;
 		bool fin;
-		bool winner;
+		int winner;
 		time_t timer[3]; // [2] uses as stop watch
 		string player[2]; // player 0 always black
 		int moves;
@@ -58,6 +58,7 @@ class game {
 			observing.push_back(users[0]);
 			observing.push_back(users[1]);
 			pending = true;
+			fin = false;
 		}
 
 
@@ -66,27 +67,43 @@ class game {
 		string move(string u, string choice) {
 			stringstream ss;
 			int result = try_move(u, choice);
-
+			ss << "\n" << print_board() << "\n";
 			switch (result) {
 				case -4: // this func was called improperly
-					ss << "Something went wrong.\n\n";
+					cerr << "Something went wrong.\n\n";
 					break;
 				case -3:
-					ss << "Please wait for your turn.\n\n"
-						<< print_board() << "\n";
+					ss << "Please wait for your turn.\n\n";
 					break;
 				case -2:
-					ss << "Range out of bounds. Try again.\n\n"
-						<< print_board() << "\n";
+					ss << "Range out of bounds. Try again.\n\n";
 					break;
 				case -1:
-					ss << "Position occupied. Try again.\n\n"
-						<< print_board() << "\n";
+					ss << "Position occupied. Try again.\n\n";
+					break;
+				case 10:
+					ss << "Your time ran out. You lose.\n"
+						<< player[turn] << " wins!!\n";
+					winner = !turn;
+					fin = true;
+					/* initiate game remover */
 					break;
 				default:
-					ss << print_board() << "\n";
+
+					if (moves > 4) {
+						if (check_win()) {
+							ss << "Congratualtions, you have won the game!!\n\n";
+							fin = true;
+							winner = turn;
+						}
+						else if (moves == 8) {
+							ss << "Cat game.\n\n";
+							fin = true;
+							winner = -1;
+						}
+					}
 			}
-			if (moves > 4) check_win();
+
 			return ss.str();
 		}
 
@@ -94,21 +111,18 @@ class game {
 			int spot;
 
 			// not there turn or invalid request
-			if (u != player[turn])
-				return -3;
-			else if (u != player[!turn])
-				return -4;
+			if (u != player[turn]) {
+				if (u != player[!turn]) return -4;
+				else return -3;
+			}
 
 			// update remaining user time and clock timer
-			timer[turn] -= difftime(time(NULL), timer[3]);
-			timer[3] = time(NULL);
+			timer[turn] -= difftime(time(NULL), timer[2]);
+			timer[2] = time(NULL);
 
 			// check if time ran out
-			if (timer[turn] < 1) {
-				fin = true;
-				winner = !turn;
+			if (timer[turn] < 1)
 				return 10;
-			}
 
 			// get spot or error code (-1 occupied, -2 bad range)
 			if ((spot = get_spot(choice)) < 0)
@@ -118,15 +132,9 @@ class game {
 			board[spot] = icon[turn];
 			++moves;
 
-			// check for end of game
-			if (moves == 8) {
-				fin = true;
-				winner = turn;
-				return 0;
-			}
-
 			// change turns
 			turn = !turn;
+			return 0;
 		}
 
 		int get_spot(string str) {
@@ -157,13 +165,13 @@ class game {
 						win = 1;       /* 1 4 7 */
 				}
 			}
-			else if ((c = board[1]) != '.') {
+			if ((c = board[1]) != '.') {
 				if (board[4] == c) {
 					if (board[7] == c)
 						win = 1;       /* 2 5 8 */
 				}
 			}
-			else if ((c = board[2]) != '.') {
+			if ((c = board[2]) != '.') {
 				if (board[4] == c) {
 					if (board[6] == c)
 						win = 1;       /* 3 5 7 */
@@ -173,19 +181,18 @@ class game {
 						win = 1;       /* 3 6 9 */
 				}
 			}
-			else if ((c = board[3]) != '.') {
+			if ((c = board[3]) != '.') {
 				if (board[4] == c) {
 					if (board[5] == c)
 						win = 1;       /* 4 5 6 */
 				}
 			}
-			else if ((c = board[6]) != '.') {
+			if ((c = board[6]) != '.') {
 				if (board[7] == c) {
 					if (board[8] == c)
 						win = 1;       /* 7 8 9 */
 				}
 			}
-			fin = win;
 			return win;
 		}
 
@@ -346,7 +353,7 @@ int g_request(string u_name, vector<string> argv) {
 	player[0] = u_name; // sender
 	player[1] = argv[1]; // reciever
 	g_new = g_lookup(player); // find pending game
-	
+
 
 	// check for existing game or init new one
 	if(g_new != NULL) {
@@ -389,7 +396,7 @@ int g_request(string u_name, vector<string> argv) {
 	}
 
 	// new pending request
-	return -1;
+	return g_new->id;
 }
 
 
@@ -415,6 +422,19 @@ string show_games() {
 	for (g = games.begin(); g != games.end(); ++g)
 		ss << g->metadata();
 	return ss.str();
+}
+
+
+void rem_game(int gid) {
+	vector<game>::iterator g;
+	for (g = games.begin(); g != games.end(); ++g)
+		if (g->id == gid) {
+			g = games.erase(g);
+			for (; g != games.end(); ++g) {
+				--(g->id);
+			}
+			break;
+		}
 }
 
 #endif
