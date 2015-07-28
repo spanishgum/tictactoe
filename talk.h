@@ -541,7 +541,7 @@ bool Parse(string line, user& u) {
 	else if (v[0].length() == 2) {
 		string opp = u.get_oppon();
 		ss << u.move(v[0]);
-		ss2 << (u.match)->print_board() << "\n";
+		ss2 << "\n\n" << (u.match)->print_board() << "\n";
 		if (u.match) {
 			if ((u.match)->fin){
 				game_fin(u);
