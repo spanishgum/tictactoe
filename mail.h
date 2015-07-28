@@ -26,9 +26,10 @@ class mail {
 		string title;
 		string from;
 		string body;
+		string to;
 
 	friend ostream& operator <<(ostream &ofs, mail m) {
-		ofs << m.id << "\n" << m.open << "\n" << m.title << "\n"
+		ofs << m.open << "\n" << m.title << "\n"
 			<< m.from << "\n" << (int)m.timestamp << "\n" << m.body;
 			// '.' on one line denotes end of mail
 		return ofs;
@@ -46,7 +47,7 @@ class mail {
 		} while (line.compare(".") != 0); // end of mail marker
 
 		// double check mail meta data quality
-		if (num_lines < 6) {
+		if (num_lines < 5) {
 			if (num_lines > 1)
 				cerr << "Back up data file may be corrupted. . .\n"
 					<< "\tAborting load for curr mail object\n";
@@ -57,7 +58,6 @@ class mail {
 		}
 
 		// proceed to grab mail data
-		getline(form, data); m.id = _stoi(data);
 		getline(form, data); m.open = (bool) _stoi(data);
 		getline(form, data); m.title = data;
 		getline(form, data); m.from = data;
@@ -86,11 +86,12 @@ class mail {
 	}
 
 
-	mail(string m_title = "", string m_from = "", string m_body = ".\n") {
+	mail(string m_title = "", string m_from = "", string m_body = ".\n", string m_to = "") {
 		id = -1;
 		title = m_title;
 		from = m_from;
 		body = m_body;
+		to = m_to;
 		timestamp = time(NULL);
 		open = false;
 	}
