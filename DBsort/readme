@@ -1,0 +1,19 @@
+dbsort.cpp	-	Steven Rohr & Adam Stallard
+
+To run: make, then ./dbsort <path to file>
+Alternative, make demo0 will attempt to run test0 and 
+			 make demo1 will attempt to run test1.
+
+Best times:
+	Unfortunately I was not able to get a complete run
+	(mostly due to kill -9 signals from an unknown source),
+	but on smaller datasets I have verified that the program 
+	does faithfully sort data (thus I know my output would be 
+	right), and from the incomplete runs I have had, runtime 
+	appears to be on the magnitude of:
+		test0: 8 hours
+		test1: 7.5 hours
+	I can, if you like, get a complete run after class (maybe
+	later, once I've gone home for the day) without altering the
+	code, and send you those times.
+	

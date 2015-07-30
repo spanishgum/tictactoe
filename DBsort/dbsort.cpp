@@ -30,7 +30,6 @@ ifstream iftmp[NTHREADS];
 
 pthread_mutex_t qlock[NTHREADS];
 
-pthread_cond_t readyToPrint [NTHREADS];
 pthread_mutex_t mymutex[NTHREADS];
 
 bool doneReading = false;
@@ -54,7 +53,7 @@ static int callback(void *data, int argc, char **argv, char **azColName){
 
 //Or "Read()". Honestly we're basically doing producer consumer problem.
 void Producer(string path){
-	cout << "Consumer launched!" << endl;
+	cout << "Producer launched!" << endl;
 	int fd = open(path.c_str(), O_RDONLY);
 	long long e;
 	long nNums = 0;
@@ -90,7 +89,7 @@ void Producer(string path){
 			printf("Err: Read unexpexted number of bytes.\n");
 		}
 
-		//if (nNums > 5000) break;
+		//if (nNums > 10000) break;
 	
 	}
 
@@ -107,7 +106,7 @@ void* Consumer(void* arg){
 	int machineID = id +  3; //3, 4, 5, 6. Reader is 2 or 7.
 	string cmd, query, fname;
 	stringstream ss;
-
+	pthread_mutex_lock(&mymutex[id]);
 	ss << "file" << id << ".tmp";
 	fname = ss.str();
 	ss.str(""); ss.clear();
@@ -133,34 +132,77 @@ void* Consumer(void* arg){
 	//Make db file
 	sqlite3 * db;
 	sqlite3_open(dbname.c_str(), &db);
+	long batchCount = 0;
+	bool hasbatch = false;
 
 	//One table in the whole database. Hah. It'll work though!
-	query = "CREATE TABLE IF NOT EXISTS numbers (value BIGINT, t2 timestamp(9));";
+	query = "CREATE TABLE IF NOT EXISTS numbers (value BIGINT);";//, t2 timestamp(9));";
 	sqlite3_stmt *createStmt;
 	sqlite3_prepare_v2(db, query.c_str(), query.size(), &createStmt, NULL);
 	if (sqlite3_step(createStmt) != SQLITE_DONE) cout << "ERROR: Could not create table!" << endl;
 
+	ss.str(""); ss.clear();
+	sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+	//ss << "INSERT INTO numbers VALUES (";
+	hasbatch = false;
 	while(!(doneReading && inq[id].empty())){
 		if (inq[id].empty()) usleep(250);
+		//if (inq[id].size() < 10000) usleep(25000);
 		while (!inq[id].empty()){
 
+			
 			pthread_mutex_lock(&qlock[id]);
 			l = inq[id].front(); //Get next element.
 			inq[id].pop(); //Pop it. We will insert this.
 			pthread_mutex_unlock(&qlock[id]);
 
-		   ss << "INSERT INTO numbers VALUES (" << l << ", CURRENT_TIMESTAMP);"; 
-		   query = ss.str();
-		   ss.str(""); ss.clear();
-		   //cout << "SQL: " << query << endl;
+			/*if (hasbatch){
+				ss << ", (" << l << ")";
+			}
+			else{
+				ss << "(" << l << ")";
 
-		   sqlite3_stmt *insertStmt;
-		   sqlite3_prepare(db, query.c_str(), query.size(), &insertStmt, NULL);
-		   if (sqlite3_step(insertStmt) != SQLITE_DONE) cout << "ERROR: Could not enter data into table!" << endl;
-		   nInserted++;
-		   if (nInserted%1000 == 0)
-		   		cout << "Thread #" << id << " has inserted " << nInserted << " values." << endl;
+			}*/
+			
+		   	ss << "INSERT INTO numbers VALUES (" << l << ");"; // ", CURRENT_TIMESTAMP);\n"; 
+			query = ss.str();
+			ss.str(""); ss.clear();
+
+			hasbatch = true;
+			batchCount++;
+
+			//sqlite3_stmt *insertStmt;
+			sqlite3_exec(db, query.c_str(), NULL, NULL, NULL);
+			//sqlite3_prepare(db, query.c_str(), query.size(), &insertStmt, NULL);
+			//if (sqlite3_step(insertStmt) != SQLITE_DONE) cout << "ERROR: Could not enter data into table!" << endl;
+			
+			
+		   //query = ss.str();
+		   //ss.str(""); ss.clear();
+
+		   	if (batchCount % 1000000 == 0){
+		   		sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
+		   		//ss << ");";
+				nInserted += 1000000;
+				batchCount = 0;
+				hasbatch = false;
+				//ss << "INSERT INTO numbers VALUES (";
+				sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+
+				if (nInserted%1000000 == 0)
+					cout << "Thread #" << id << " has inserted " << nInserted/1000000 << " million values." << endl;
+		   
+			}
+
+		   //cout << "SQL: " << query << endl;
+		   
 		}
+	}
+
+	if (hasbatch){
+   		//ss << ");";
+   		sqlite3_exec(db, "END TRANSACTION;", NULL, NULL, NULL);
+		
 	}
 
 	cout << "Thread #" << id << " executing SELECT statement." << endl;
@@ -174,11 +216,15 @@ void* Consumer(void* arg){
 		fprintf(stderr, "SQL error: %s\n", zErrMsg);
 	    sqlite3_free(zErrMsg);
 	}
+	cout << "Thread #" << id << " done." << endl;
 
 	sqlite3_close(db);
 
 	oftmp[id].close();
-	pthread_cond_signal(&readyToPrint[id]);
+	pthread_mutex_unlock(&mymutex[id]);
+	cout << "Thread #" << id << " signaled done." << endl;
+
+	return NULL;
 } 
 
 int main(int narg, char ** argc){	
@@ -202,9 +248,9 @@ int main(int narg, char ** argc){
 		exit(1);
 	}
 
-	for (int i = 0; i < NTHREADS; i++){
+	/*for (int i = 0; i < NTHREADS; i++){
 		pthread_cond_init(&readyToPrint[i], NULL);
-	}
+	}*/
 
 	path = argc[1];
 
@@ -231,6 +277,9 @@ int main(int narg, char ** argc){
 					}
 					else if (e < MIN) MIN = e;
 					else if (e > MAX) MAX = e;
+
+					if ((float)((float)MIN/(float)MAX) < 0.005)
+						break; //Small enough.
 
 					//Skip a shitload of numbers for speed
 					lseek(fd, 100000*sizeof(e), SEEK_CUR);
@@ -273,7 +322,8 @@ int main(int narg, char ** argc){
 	stringstream ss;
 
 	for (int i = 0; i < NTHREADS; i++){
-		pthread_cond_wait(&readyToPrint[i], &mymutex[i]);
+		cout << "Waiting on thread #" << i << endl;
+		pthread_mutex_lock(&mymutex[i]);
 		ss << "file" << i << ".tmp";
 		iftmp[i].open(ss.str().c_str());
 		ss.str(""); ss.clear();
@@ -282,7 +332,7 @@ int main(int narg, char ** argc){
 		while (iftmp[i]){
 			if (itr%10 == 0){
 				ofile << ele << endl;
-				cout << ele << endl;
+				//cout << ele << endl;
 			}
 
 			iftmp[i] >> ele;
@@ -295,12 +345,10 @@ int main(int narg, char ** argc){
 	
 	//t4 = omp_get_wtime();
 	cout << "Done. \nGoodbye World.\n";
-	cmd = "rm *.db";
-	system(cmd.c_str());
-	cmd = "rm *.db-journal";
+	cmd = "rm *.db*";
 	system(cmd.c_str());
 	cmd = "rm *.tmp";
 	system(cmd.c_str());
 
-
+	return 0;
 }
